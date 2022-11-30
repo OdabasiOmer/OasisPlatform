@@ -98,6 +98,7 @@ ENV/
 
 # Docker
 db-data/
+docker-shared-fs
 
 /src/server/db.sqlite3
 /src/server/media

@@ -129,6 +129,7 @@ services:
      - celery-db
      - rabbit
   user-interface:
+    restart: always
     image: coreoasis/oasisui_app:latest
     environment:
      - API_IP=server
@@ -137,4 +138,4 @@ services:
      - API_SHARE_FILEPATH=./downloads
      - OASIS_ENVIRONMENT=oasis_localhost
     ports:
-     - 8080:3838
+     - 8080:8080
