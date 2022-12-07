@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export OASIS_MODEL_DATA_DIR=./models/OasisRed
+export OASIS_MODEL_DATA_DIR=../GitHub/OasisRed/
 
 docker rmi coreoasis/api_server:latest
 docker rmi coreoasis/model_worker:latest

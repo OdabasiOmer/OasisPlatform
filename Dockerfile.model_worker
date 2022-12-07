@@ -11,9 +11,9 @@ RUN pip3 install --user --no-warn-script-location -r ./requirements-worker.txt
 # ---- STAGE 2 ----
 FROM ubuntu:22.04
 RUN apt-get update \
- && apt-get upgrade -y \
- && apt-get install -y --no-install-recommends vim python3 python3-pip libspatialindex-dev curl procps \
- && rm -rf /var/lib/apt/lists/*
+    && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends vim python3 python3-pip libspatialindex-dev curl procps \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy built python packages 
 COPY --from=build-packages /root/.local /root/.local
@@ -41,6 +41,7 @@ COPY ./src/utils/ ./src/utils/
 COPY ./src/utils/worker_bashrc /root/.bashrc
 COPY ./tests/integration /home/worker/tests/integration
 COPY ./VERSION ./
+# TODO > copy over redloss + the OED input mapper.
 
 # Add required directories 
 RUN mkdir -p /var/oasis && \

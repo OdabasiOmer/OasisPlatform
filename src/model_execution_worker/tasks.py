@@ -424,6 +424,12 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         # Subprocess Execution
         worker_env = os.environ.copy()
 
+        logging.info("REDLoss will be incorporated here later.")
+        # Do: Call REDCat
+        # Do: wait for REDCAT to conclude analysis (turn xero?)
+        # Do: stream:  fmcalc | summarycalc  -OR-  just fmcalc + substitute functions in place of summarycalc.
+        # Do: thats is? 
+
         proc = subprocess.Popen(
             ['oasislmf', 'model', 'generate-losses'] + run_args,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=worker_env,
