@@ -103,4 +103,4 @@ docker-shared-fs
 /src/server/db.sqlite3
 /src/server/media
 .DS_Store
-models/OasisRed
+./models/OasisRed
