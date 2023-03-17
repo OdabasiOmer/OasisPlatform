@@ -1,0 +1,10 @@
+OPT_GRIDFILE,./work/portfolio.grd
+OPT_RUPFILE,/home/omer/REDCat/model_data/IT_Cat_AS_10k_RhypOK.cat
+OPT_OUTDIR,./work/hazout/
+OPT_OCCURRENCE,true
+OPT_COUNTRY,IT02
+OPT_VS30,760.0
+OPT_PERIOD,0.0
+OPT_THREADSNUM,2
+OPT_VERBOSE,0
+OPT_TERMINAL,true

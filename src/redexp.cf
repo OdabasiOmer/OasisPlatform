@@ -1,0 +1,6 @@
+OPT_IMPORT,portfolio
+OPT_GRIDFILEFMT,eu
+OPT_GRIDFILE,./input/portfolio.csv
+OPT_OUTDIR,./work
+OPT_OUTPUTFILE,portfolio.prf
+OPT_VERBOSE,1

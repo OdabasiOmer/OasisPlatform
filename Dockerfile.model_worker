@@ -41,7 +41,7 @@ COPY ./src/utils/ ./src/utils/
 COPY ./src/utils/worker_bashrc /root/.bashrc
 COPY ./tests/integration /home/worker/tests/integration
 COPY ./VERSION ./
-# TODO > copy over redloss + the OED input mapper.
+# TODO > copy over REDCat tools and processes.
 
 # Add required directories 
 RUN mkdir -p /var/oasis && \
