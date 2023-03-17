@@ -37,9 +37,10 @@ username=$(whoami)
 p1="/home/${username}/REDCat/bin"
 p2="/usr/lib/x86_64-linux-gnu"
 ORED_EXP_KEYS_DIR=~/GitHub/ored-exposure-mapping/oed_exposure/
-nS=1
-read -p "Number of samples -- as is set in redloss.cf? [00-99] " -n 2 -r nS
-echo
+nS=10
+# Commenting out below line, fixing nS at 10 for current version of platform
+#read -p "Number of samples -- as is set in redloss.cf? [00-99] " -n 2 -r nS
+#echo
 
 ###################################################
 # PROGRAM

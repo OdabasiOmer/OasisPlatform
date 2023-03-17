@@ -445,13 +445,21 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         log_directory = os.path.join(run_dir, "log")
         log_location = filestore.put(log_directory, suffix=ARCHIVE_FILE_SUFFIX)
 
-        logging.info("Configuring REDCat run...")
-        # Do: Call REDCat
-        # Do: wait for REDCAT to conclude analysis (turn xero?)
-        # Do: stream:  fmcalc | summarycalc  -OR-  just fmcalc + substitute functions in place of summarycalc.
-        # Do: thats is? 
+        ##########################################################################
+        #
+        #                       R E D C a t
+        #
+        ##########################################################################
         
+        logging.info("Configuring REDCat run...")
+        # Step-1) Copy over sh and cf files to run_dir
+        
+        # Step-2) cd into run_dir if not already there.
 
+        # Step-3) If Step-2 is not possible, run the 'run-ored.sh' file from run_dir, 
+        # which will run REDCat + ktools
+
+        
         # Results dir & analysis-settings
         output_directory = os.path.join(run_dir, "output")
         output_location = filestore.put(output_directory, suffix=ARCHIVE_FILE_SUFFIX, arcname='output')
