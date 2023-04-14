@@ -449,16 +449,44 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         #
         #                       R E D C a t
         #
+        #  binaries at /home/worker/model/src/redcat
+        #  model data at /home/worker/model/model_data/OasisRed/redcat
+        #  model data (vuln, IT) at /home/worker/model/model_data/OasisRed/redcat/IT
         ##########################################################################
+        oed_keys_dir = "/home/worker/model/model_data/OasisRed/redcat"
         
+
         logging.info("Configuring REDCat run...")
-        # Step-1) Copy over sh and cf files to run_dir
+
+        subprocess.call(["pwd"])
+        subprocess.call(["ls", "-l"])
         
-        # Step-2) cd into run_dir if not already there.
+        subprocess.call(["cp","/home/worker/model/run-ored.sh",run_dir])
+        logging.info("Copied run-ored.sh over. The contents of run_dir:")
+        subprocess.call(["ls",run_dir])
+
+        logging.info("The contents of run_dir/input instead:")
+        subprocess.call(["ls",run_dir + "/input"])
+        
+        os.chdir(run_dir)
+        
+        logging.info("Trying to change dir to run_dir. PWD:")
+        subprocess.call(["pwd"])
+        subprocess.call(["ls"])
+
+        logging.info("Setting run-ored.sh privilages and running scriiipt...")
+        subprocess.call(["chmod", "+xwr", "run-ored.sh"])
+        subprocess.call(["./run-ored.sh"], cwd=run_dir)
+        
+        os.chdir("/home/worker")
+        logging.info("Changing back to /home/worker. PWD:")
+        subprocess.call(["pwd"])
+        subprocess.call(["ls"])
 
         # Step-3) If Step-2 is not possible, run the 'run-ored.sh' file from run_dir, 
         # which will run REDCat + ktools
 
+        ##########################################################################
         
         # Results dir & analysis-settings
         output_directory = os.path.join(run_dir, "output")

@@ -17,7 +17,7 @@ RUN apt-get update \
 
 # Copy built python packages 
 COPY --from=build-packages /root/.local /root/.local
-ENV PATH=/root/.local/bin:$PATH
+ENV PATH=/home/worker/model/src/redcat:/root/.local/bin:$PATH
 
 # Enviroment setup
 ENV DEBIAN_FRONTEND=noninteractive
@@ -41,7 +41,9 @@ COPY ./src/utils/ ./src/utils/
 COPY ./src/utils/worker_bashrc /root/.bashrc
 COPY ./tests/integration /home/worker/tests/integration
 COPY ./VERSION ./
-# TODO > copy over REDCat tools and processes.
+# TODO > REquired REDCat dlls.
+
+
 
 # Add required directories 
 RUN mkdir -p /var/oasis && \
