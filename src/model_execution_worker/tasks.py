@@ -36,6 +36,8 @@ from .storage_manager import BaseStorageConnector
 from .backends.aws_storage import AwsObjectStore
 from .backends.azure_storage import AzureObjectStore
 
+from .red_utility import *
+
 '''
 Celery task wrapper for Oasis ktools calculation.
 '''
@@ -454,7 +456,8 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         #  model data (vuln, IT) at /home/worker/model/model_data/OasisRed/redcat/IT
         ##########################################################################
         oed_keys_dir = "/home/worker/model/model_data/OasisRed/redcat"
-        
+        redcat_bins_dir = "/home/worker/model/model_data/OasisRed/src/redcat"
+        redcat_model_data = "/home/worker/model/model_data/OasisRed/redcat"
 
         logging.info("Configuring REDCat run...")
 
@@ -475,16 +478,62 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         subprocess.call(["ls"])
 
         logging.info("Setting run-ored.sh privilages and running scriiipt...")
-        subprocess.call(["chmod", "+xwr", "run-ored.sh"])
-        subprocess.call(["./run-ored.sh"], cwd=run_dir)
+        subprocess.call(["chmod", "+x", "run-ored-fifo.sh"])
         
+        # <TODO> Step-2) Generate run-ored.sh based on user input (not copy over from OasisRED)
+        
+        # Step-0) Generate REDCat portfolio input
+        shutil.copy(os.path.join(oed_keys_dir,'occupancy_codes.csv'))
+        shutil.copy(os.path.join(oed_keys_dir,'construction_codes.csv'))
+        shutil.copy(os.path.join(oed_keys_dir,'oed_fields.csv'))
+        logging.info("Calling oredexp to generate REDCat propriety input portfolio.csv file")
+        proc = subprocess.call(["oredexp", "-i", './input/', '-o', './input/'])
+        stdout, stderr = proc.communicate()
+        
+        # Step-1) <pre-REDCat> Define boundary area for analysis
+        fetch_coordinates_from_location_file('input/location.csv',
+                                             'work/coordinates.txt')
+
+        # Step-2) <pre-REDHaz/Loss> Run REDField
+        setup_redcat_spatialcorr(coord_filepath='work/coordinates.txt',
+                                 redcat_bins_dir=redcat_bins_dir)
+        
+        # Step-3) <pre-REDHaz/Loss> Shortlist ruptures that need to be considered in analysis
+        map_files_dir = os.path.join(redcat_model_data, 'maps_bin')
+        shortlist_zone_idx = './work/shortlisted_zones.idx'  # to be created by getzones
+        zones_path = os.path.join(redcat_model_data, 'zones.idx')
+        ruptures_path = os.path.join(redcat_model_data, 'ruptures.idx')
+
+        command = f'getzones work/coordinates.txt {zones_path} {shortlist_zone_idx}'
+        
+        process = subprocess.Popen(command,
+                                shell=True,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE)
+        
+        stdout, stderr = process.communicate()
+        if not process.returncode == 0:
+            logging.error('getzones econountered an error, exiting program!')
+            exit(1)
+
+        shortlist_ruptures(rupture_zone_idx_file=ruptures_path,
+                                shortlisted_zones_idx=shortlist_zone_idx,
+                                map_files_dir=map_files_dir,
+                                out_filename='work/mapBins.fls')
+
+
+        # Step-4) Run run-ored-fifo.sh script
+        subprocess.call(["./run-ored-fifo.sh"], cwd=run_dir)
+        # TODO #
+        # -----------
+        # Check if run-ored finished successfuylly!
+        # -----------
+        # TODO #
+
         os.chdir("/home/worker")
         logging.info("Changing back to /home/worker. PWD:")
         subprocess.call(["pwd"])
         subprocess.call(["ls"])
-
-        # Step-3) If Step-2 is not possible, run the 'run-ored.sh' file from run_dir, 
-        # which will run REDCat + ktools
 
         ##########################################################################
         
