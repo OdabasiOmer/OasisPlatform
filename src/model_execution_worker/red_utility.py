@@ -1,7 +1,8 @@
 import csv
 import os
-import re
 import sys
+import subprocess
+import logging
 import configparser
 import numpy as np
 import matplotlib.pyplot as plt
@@ -156,6 +157,58 @@ def get_non_underscore_folders():
         name for name in folder_names if not name.startswith('_')]
     return non_underscore_folders
 
+def partition_events(num_threads, base_fls_file):
+    # Read the contents of the input file
+    with open(base_fls_file, 'r') as file:
+        lines = file.readlines()
+
+    # Calculate the number of lines per chunk
+    lines_per_chunk = len(lines) // num_threads
+
+    # Split the file and write the chunks
+    for i in range(num_threads):
+        chunk = lines[i*lines_per_chunk : (i+1)*lines_per_chunk]
+
+        # Handle the last chunk to include any remaining lines
+        if i == num_threads - 1:
+            chunk = lines[i*lines_per_chunk :]
+
+        # Write the chunk to a new file
+        with open(f'HFL{i+1}.txt', 'w') as chunk_file:
+            chunk_file.writelines(chunk)
+
+def partition_redloss_config(num_threads, base_cf_filepath):
+    """
+    Function to create multiple redloss configuration files based on a baseline file.
+
+    Parameters:
+    base_cf_filepath (str): Path to the baseline configuration file (redloss.cf).
+    num_threads (int): Number of configuration files to create.
+    """
+
+    # Import the baseline configuration file
+    with open(base_cf_filepath, 'r') as file:
+        base_content = file.readlines()
+
+    # Iterate through the number of threads and create new files
+    for i in range(num_threads):
+        new_content = []
+
+        # Iterate through each line of the base file and modify as required
+        for line in base_content:
+            if 'OPT_MAPDATAFILELIST' in line:
+                key, _ = line.split(',')
+                new_line = f"{key},./HFL{i}\n"
+            elif 'OPT_FIFO' in line:
+                key, _ = line.split(',')
+                new_line = f"{key},fifo_p{i}\n"
+            else:
+                new_line = line
+            new_content.append(new_line)
+
+        # Write the new content to a file
+        with open(f"redloss{i}.cf", 'w') as new_file:
+            new_file.writelines(new_content)
 
 def read_config(file_path, logfile=None):
     config = configparser.ConfigParser()
@@ -180,6 +233,29 @@ def read_config(file_path, logfile=None):
         [log_to_file(m, logfile) for m in msg]
     
     return parameters, test_cases
+
+def run_getzones(zones_path, shortlist_zone_idx, ruptures_path, map_files_dir):
+    command = f'getzones work/coordinates.txt {zones_path} {shortlist_zone_idx}'
+    process = subprocess.Popen(command,
+                            shell=True,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE)
+    
+    stdout, stderr = process.communicate()
+    if not process.returncode == 0:
+        logging.info('stderr: {}'.format(stderr.decode()))
+        logging.info('stdout: getzones econountered an error, exiting program!')
+        return False
+
+    shortlist_ruptures(rupture_zone_idx_file=ruptures_path,
+                            shortlisted_zones_idx=shortlist_zone_idx,
+                            map_files_dir=map_files_dir,
+                            out_filename='work/mapBins.fls')
+    
+    process.terminate()
+
+    return True
+
 
 def make_dirs():
     if not os.path.exists('output'):

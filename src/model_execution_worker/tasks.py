@@ -439,22 +439,16 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         logging.info('stderr: {}'.format(stderr.decode()))
         proc.terminate()
 
-        # Traceback file (stdout + stderr)
-        traceback_file = filestore.create_traceback(stdout.decode(), stderr.decode(), run_dir)
-        traceback_location = filestore.put(traceback_file)
-
-        # Ktools log Tar file
-        log_directory = os.path.join(run_dir, "log")
-        log_location = filestore.put(log_directory, suffix=ARCHIVE_FILE_SUFFIX)
 
         ##########################################################################
         #
         #                       R E D C a t
         #
-        #  binaries at /home/worker/model/src/redcat
-        #  model data at /home/worker/model/model_data/OasisRed/redcat
-        #  model data (vuln, IT) at /home/worker/model/model_data/OasisRed/redcat/IT
+        #  - REDCat and other exe at /home/worker/model/src/redcat
+        #  - model data at /home/worker/model/model_data/OasisRed/redcat
+        #
         ##########################################################################
+
         oed_keys_dir = "/home/worker/model/model_data/OasisRed/redcat"
         redcat_bins_dir = "/home/worker/model/model_data/OasisRed/src/redcat"
         redcat_model_data = "/home/worker/model/model_data/OasisRed/redcat"
@@ -464,7 +458,8 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         subprocess.call(["pwd"])
         subprocess.call(["ls", "-l"])
         
-        subprocess.call(["cp","/home/worker/model/run-ored.sh",run_dir])
+        # subprocess.call(["cp","/home/worker/model/run-ored.sh",run_dir])
+        shutil.copy('/home/worker/model/run-ored.sh', run_dir)
         logging.info("Copied run-ored.sh over. The contents of run_dir:")
         subprocess.call(["ls",run_dir])
 
@@ -477,20 +472,32 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         subprocess.call(["pwd"])
         subprocess.call(["ls"])
 
-        logging.info("Setting run-ored.sh privilages and running scriiipt...")
+        logging.info("Setting run-ored-fifo.sh privilages and running scriiipt...")
         subprocess.call(["chmod", "+x", "run-ored-fifo.sh"])
         
-        # <TODO> Step-2) Generate run-ored.sh based on user input (not copy over from OasisRED)
+        # Step-0a) Copy over REDCat .cf files
+        shutil.copy('/home/worker/model/redexp.cf', '.')
+        shutil.copy('/home/worker/model/redhazoq-creategrid.cf', '.')
+        shutil.copy('/home/worker/model/redhazoq.cf', '.')
+        shutil.copy('/home/worker/model/redfield-create.cf', '.')
+        shutil.copy('/home/worker/model/redfield-int.cf', '.')
+        shutil.copy('/home/worker/model/redloss.cf', '.')
         
-        # Step-0) Generate REDCat portfolio input
+        # Step-0b) Generate REDCat portfolio input
         shutil.copy(os.path.join(oed_keys_dir,'occupancy_codes.csv'))
         shutil.copy(os.path.join(oed_keys_dir,'construction_codes.csv'))
         shutil.copy(os.path.join(oed_keys_dir,'oed_fields.csv'))
         logging.info("Calling oredexp to generate REDCat propriety input portfolio.csv file")
         proc = subprocess.call(["oredexp", "-i", './input/', '-o', './input/'])
         stdout, stderr = proc.communicate()
-        
-        # Step-1) <pre-REDCat> Define boundary area for analysis
+        if not proc.returncode == 0:
+            logging.info('stderr: {}'.format(stderr.decode()))
+
+        # Step-0) <pre-REDCat> Input validation
+        # TODO
+
+
+        # Step-1) <pre-REDCat> Define boundary area for analysis.
         fetch_coordinates_from_location_file('input/location.csv',
                                              'work/coordinates.txt')
 
@@ -504,30 +511,23 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         zones_path = os.path.join(redcat_model_data, 'zones.idx')
         ruptures_path = os.path.join(redcat_model_data, 'ruptures.idx')
 
-        command = f'getzones work/coordinates.txt {zones_path} {shortlist_zone_idx}'
+        # 3A) Execute getzones program
+        success = run_getzones(zones_path, shortlist_zone_idx, ruptures_path, map_files_dir)
+
+        # Step-4A) Set upt redloss*.cf and HFL*.fls
+        # TODO: num_threads to be set to a fixed value?
+        partition_events(num_threads=8, base_fls_file='./work/maps_int/Interpolated.fls')
+        partition_redloss_config(num_threads=8, base_cf_filepath='redloss.cf')
+        logging.info("Partitioned events for multi-threaded analysis.")
         
-        process = subprocess.Popen(command,
-                                shell=True,
-                                stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE)
-        
-        stdout, stderr = process.communicate()
-        if not process.returncode == 0:
-            logging.error('getzones econountered an error, exiting program!')
-            exit(1)
+        # Step-4B) Set up run-ored-fifo.sh script
+        # TODO
 
-        shortlist_ruptures(rupture_zone_idx_file=ruptures_path,
-                                shortlisted_zones_idx=shortlist_zone_idx,
-                                map_files_dir=map_files_dir,
-                                out_filename='work/mapBins.fls')
-
-
-        # Step-4) Run run-ored-fifo.sh script
+        # Step-4C) Run run-ored-fifo.sh script
         subprocess.call(["./run-ored-fifo.sh"], cwd=run_dir)
         # TODO #
-        # -----------
+        
         # Check if run-ored finished successfuylly!
-        # -----------
         # TODO #
 
         os.chdir("/home/worker")
@@ -535,8 +535,18 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         subprocess.call(["pwd"])
         subprocess.call(["ls"])
 
+        # ----------------------------------------------------------------------
+        # End of REDCat integration
         ##########################################################################
         
+        # Traceback file (stdout + stderr)
+        traceback_file = filestore.create_traceback(stdout.decode(), stderr.decode(), run_dir)
+        traceback_location = filestore.put(traceback_file)
+
+        # Ktools log Tar file
+        log_directory = os.path.join(run_dir, "log")
+        log_location = filestore.put(log_directory, suffix=ARCHIVE_FILE_SUFFIX)
+
         # Results dir & analysis-settings
         output_directory = os.path.join(run_dir, "output")
         output_location = filestore.put(output_directory, suffix=ARCHIVE_FILE_SUFFIX, arcname='output')
