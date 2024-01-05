@@ -450,8 +450,8 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         ##########################################################################
 
         oed_keys_dir = "/home/worker/model/model_data/OasisRed/redcat"
-        redcat_bins_dir = "/home/worker/model/model_data/OasisRed/src/redcat"
         redcat_model_data = "/home/worker/model/model_data/OasisRed/redcat"
+        redcat_bins_dir = "/home/worker/model/src/redcat"
 
         logging.info("Configuring REDCat run...")
 
@@ -459,13 +459,15 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         subprocess.call(["ls", "-l"])
         
         # subprocess.call(["cp","/home/worker/model/run-ored.sh",run_dir])
-        shutil.copy('/home/worker/model/run-ored.sh', run_dir)
-        logging.info("Copied run-ored.sh over. The contents of run_dir:")
+        shutil.copy('/home/worker/model/run-ored-fifo.sh', os.path.join(run_dir, 'run-ored-fifo.sh'))
+        logging.info("Copied run-ored-fifo.sh over. The contents of run_dir:")
         subprocess.call(["ls",run_dir])
 
         logging.info("The contents of run_dir/input instead:")
         subprocess.call(["ls",run_dir + "/input"])
         
+        # WARNING: This is a cause of headaches.. I have to make sure that tasks.py doesnt get stuck inside the run_dir! 
+        #TODO
         os.chdir(run_dir)
         
         logging.info("Trying to change dir to run_dir. PWD:")
@@ -476,36 +478,39 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         subprocess.call(["chmod", "+x", "run-ored-fifo.sh"])
         
         # Step-0a) Copy over REDCat .cf files
-        shutil.copy('/home/worker/model/redexp.cf', '.')
-        shutil.copy('/home/worker/model/redhazoq-creategrid.cf', '.')
-        shutil.copy('/home/worker/model/redhazoq.cf', '.')
-        shutil.copy('/home/worker/model/redfield-create.cf', '.')
-        shutil.copy('/home/worker/model/redfield-int.cf', '.')
-        shutil.copy('/home/worker/model/redloss.cf', '.')
+        shutil.copy('/home/worker/model/redexp.cf', './redexp.cf')
+        shutil.copy('/home/worker/model/redhazoq-creategrid.cf', './redhazoq-creategrid.cf')
+        shutil.copy('/home/worker/model/redhazoq.cf', './redhazoq.cf')
+        shutil.copy('/home/worker/model/redfield-create.cf', './redfield-create.cf')
+        shutil.copy('/home/worker/model/redfield-int.cf', './redfield-int.cf')
+        shutil.copy('/home/worker/model/redloss.cf', './redloss.cf')
         
         # Step-0b) Generate REDCat portfolio input
-        shutil.copy(os.path.join(oed_keys_dir,'occupancy_codes.csv'))
-        shutil.copy(os.path.join(oed_keys_dir,'construction_codes.csv'))
-        shutil.copy(os.path.join(oed_keys_dir,'oed_fields.csv'))
+        shutil.copy(os.path.join(oed_keys_dir,'occupancy_codes.csv'), './input/occupancy_codes.csv')
+        shutil.copy(os.path.join(oed_keys_dir,'construction_codes.csv'), './input/')
+        shutil.copy(os.path.join(oed_keys_dir,'oed_fields.csv'), './input/')
         logging.info("Calling oredexp to generate REDCat propriety input portfolio.csv file")
-        proc = subprocess.call(["oredexp", "-i", './input/', '-o', './input/'])
-        stdout, stderr = proc.communicate()
-        if not proc.returncode == 0:
+
+        rcode = subprocess.call(["oredexp", "-i", './input/', '-o', './input/'])
+        if not rcode == 0:
+            logging.info('An error occurred running oredexp.')
             logging.info('stderr: {}'.format(stderr.decode()))
 
         # Step-0) <pre-REDCat> Input validation
         # TODO
 
 
-        # Step-1) <pre-REDCat> Define boundary area for analysis.
+        # Step-1) <pre-REDCat> Define boundary area for analysis and run REDExp.
         fetch_coordinates_from_location_file('input/location.csv',
                                              'work/coordinates.txt')
+        
+        os.system(f'{redcat_bins_dir}/REDExp -f redexp.cf')
 
-        # Step-2) <pre-REDHaz/Loss> Run REDField
+        # Step-3) <pre-REDLoss> Run REDField
         setup_redcat_spatialcorr(coord_filepath='work/coordinates.txt',
                                  redcat_bins_dir=redcat_bins_dir)
         
-        # Step-3) <pre-REDHaz/Loss> Shortlist ruptures that need to be considered in analysis
+        # Step-3) <pre-Loss> Shortlist ruptures that need to be considered in analysis
         map_files_dir = os.path.join(redcat_model_data, 'maps_bin')
         shortlist_zone_idx = './work/shortlisted_zones.idx'  # to be created by getzones
         zones_path = os.path.join(redcat_model_data, 'zones.idx')
@@ -513,6 +518,9 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
 
         # 3A) Execute getzones program
         success = run_getzones(zones_path, shortlist_zone_idx, ruptures_path, map_files_dir)
+        
+        # Step-X) REDHazOQ
+        os.system(f'{redcat_bins_dir}/REDHazOQ -f redhazoq.cf')
 
         # Step-4A) Set upt redloss*.cf and HFL*.fls
         # TODO: num_threads to be set to a fixed value?
