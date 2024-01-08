@@ -173,7 +173,9 @@ def partition_events(num_threads, base_fls_file):
             chunk = lines[i*lines_per_chunk :]
 
         # Write the chunk to a new file
-        with open(f'HFL{i+1}.txt', 'w') as chunk_file:
+        with open(f'HFL{i+1}.fls', 'w') as chunk_file:
+            if not i==0:
+                chunk_file.writelines(['./work/portfolio.grd\n'])
             chunk_file.writelines(chunk)
 
 def partition_redloss_config(num_threads, base_cf_filepath):
@@ -197,16 +199,16 @@ def partition_redloss_config(num_threads, base_cf_filepath):
         for line in base_content:
             if 'OPT_MAPDATAFILELIST' in line:
                 key, _ = line.split(',')
-                new_line = f"{key},./HFL{i}\n"
+                new_line = f"{key},./HFL{i+1}.fls\n"
             elif 'OPT_FIFO' in line:
                 key, _ = line.split(',')
-                new_line = f"{key},fifo_p{i}\n"
+                new_line = f"{key},fifo_p{i+1}\n"
             else:
                 new_line = line
             new_content.append(new_line)
 
         # Write the new content to a file
-        with open(f"redloss{i}.cf", 'w') as new_file:
+        with open(f"redloss{i+1}.cf", 'w') as new_file:
             new_file.writelines(new_content)
 
 def read_config(file_path, logfile=None):

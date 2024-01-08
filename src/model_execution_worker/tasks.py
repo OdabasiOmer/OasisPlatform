@@ -448,7 +448,7 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         #  - model data at /home/worker/model/model_data/OasisRed/redcat
         #
         ##########################################################################
-
+        nThread = 8
         oed_keys_dir = "/home/worker/model/model_data/OasisRed/redcat"
         redcat_model_data = "/home/worker/model/model_data/OasisRed/redcat"
         redcat_bins_dir = "/home/worker/model/src/redcat"
@@ -524,14 +524,22 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
 
         # Step-4A) Set upt redloss*.cf and HFL*.fls
         # TODO: num_threads to be set to a fixed value?
-        partition_events(num_threads=8, base_fls_file='./work/maps_int/Interpolated.fls')
-        partition_redloss_config(num_threads=8, base_cf_filepath='redloss.cf')
+        partition_events(num_threads=nThread, base_fls_file='./work/maps_int/Interpolated.fls')
+        partition_redloss_config(num_threads=nThread, base_cf_filepath='redloss.cf')
         logging.info("Partitioned events for multi-threaded analysis.")
+        
+        logging.info("Coppying over the occurrence file...")
+        shutil.copy(os.path.join(redcat_model_data,'occurrence.csv'),
+                    os.path.join(run_dir, 'input'))
         
         # Step-4B) Set up run-ored-fifo.sh script
         # TODO
 
         # Step-4C) Run run-ored-fifo.sh script
+        logging.info("Contents of the input/ folder are:")
+        subprocess.call(["ls", "-a", run_dir+'/input'])
+        
+        logging.info("Entering run-ored-fifo.sh script...")
         subprocess.call(["./run-ored-fifo.sh"], cwd=run_dir)
         # TODO #
         
