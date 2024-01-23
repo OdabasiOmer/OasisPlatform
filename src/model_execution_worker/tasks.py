@@ -554,8 +554,6 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         logging.info("Contents of the input/ folder are:")
         subprocess.call(["ls", "-a", run_dir+'/input'])
         
-        logging.info("Entering run-ored-fifo.sh script...")
-        subprocess.call(["./run-ored-fifo.sh"], cwd=run_dir)
         # TODO #
         
         # Check if run-ored finished successfuylly!
