@@ -452,14 +452,19 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         oed_keys_dir = "/home/worker/model/model_data/OasisRed/redcat"
         redcat_model_data = "/home/worker/model/model_data/OasisRed/redcat"
         redcat_bins_dir = "/home/worker/model/src/redcat"
+        runRI = False  # this is dynamically set to True if ri compute is present in analysis_settings
+
+        # Parse the analysis_settings file and extract key parameters:
+        # <TODO> Debug set to true. Set it to debug_worker later.
+        analysis_params = parse_analysis_settings_file(analysis_settings_file, debug=True)
 
         logging.info("Configuring REDCat run...")
 
         subprocess.call(["pwd"])
         subprocess.call(["ls", "-l"])
         
-        # subprocess.call(["cp","/home/worker/model/run-ored.sh",run_dir])
-        shutil.copy('/home/worker/model/run-ored-fifo.sh', os.path.join(run_dir, 'run-ored-fifo.sh'))
+        # Copy the base (initial/static) part of the custom runner script run-ored-fifo.sh over to run_dir.
+        shutil.copy('/home/worker/model/run-ored-fifo-base.sh', os.path.join(run_dir, 'run-ored-fifo-base.sh'))
         logging.info("Copied run-ored-fifo.sh over. The contents of run_dir:")
         subprocess.call(["ls",run_dir])
 
@@ -475,7 +480,7 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         subprocess.call(["ls"])
 
         logging.info("Setting run-ored-fifo.sh privilages and running scriiipt...")
-        subprocess.call(["chmod", "+x", "run-ored-fifo.sh"])
+        subprocess.call(["chmod", "+x", "run-ored-fifo-base.sh"])
         
         # Step-0a) Copy over REDCat .cf files
         shutil.copy('/home/worker/model/redexp.cf', './redexp.cf')
@@ -523,7 +528,6 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         os.system(f'{redcat_bins_dir}/REDHazOQ -f redhazoq.cf')
 
         # Step-4A) Set upt redloss*.cf and HFL*.fls
-        # TODO: num_threads to be set to a fixed value?
         partition_events(num_threads=nThread, base_fls_file='./work/maps_int/Interpolated.fls')
         partition_redloss_config(num_threads=nThread, base_cf_filepath='redloss.cf')
         logging.info("Partitioned events for multi-threaded analysis.")
@@ -533,7 +537,18 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
                     os.path.join(run_dir, 'input'))
         
         # Step-4B) Set up run-ored-fifo.sh script
-        # TODO
+        if analysis_params.has_option('default', 'ri_output'):
+            if analysis_params.getboolean('default', 'ri_output', fallback=False):
+                logging.info("Reinsurance compute requested, configuring accordingly...")
+                runRI=True
+
+        run_ktools_end = generate_bash_script(nThread, runRI, 'run-ored-end.sh')
+        run_ktools_complete = append_to_existing_file('run-ored-fifo-base.sh', run_ktools_end, 'run-ored-full.sh')
+        logging.info("Setting run-ored-full.sh privilages and running script...")
+        subprocess.call(["chmod", "+x", "run-ored-full.sh"])
+        
+        # Step-4C) Run run-ored-fifo.sh script
+        subprocess.call([f"./{run_ktools_complete}"], cwd=run_dir)
 
         # Step-4C) Run run-ored-fifo.sh script
         logging.info("Contents of the input/ folder are:")
