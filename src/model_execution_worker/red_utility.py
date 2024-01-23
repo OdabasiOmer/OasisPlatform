@@ -388,7 +388,7 @@ def get_non_underscore_folders():
         name for name in folder_names if not name.startswith('_')]
     return non_underscore_folders
 
-def parse_analysis_settings_file(file_path, debug=True):
+def parse_analysis_settings_file(file_path, debug=False):
     # Reading the JSON file
     with open(file_path, 'r') as file:
         json_data = json.load(file)
@@ -396,14 +396,14 @@ def parse_analysis_settings_file(file_path, debug=True):
     # Creating a configparser object
     config = configparser.ConfigParser()
     
-    # Converting the JSON dictionary into a format compatible with configparser
-    for section, params in json_data.items():
-        config.add_section(section)
-        if isinstance(params, dict):
-            for key, value in params.items():
-                config.set(section, key, str(value))
+    # Adding a default section for the JSON data
+    config.add_section('default')
+    for key, value in json_data.items():
+        if isinstance(value, (dict, list)):
+            # If the value is a dictionary or list, convert it to a string
+            config.set('default', key, json.dumps(value))
         else:
-            config.set(section, "value", str(params))
+            config.set('default', key, str(value))
 
     if debug:
         config.write(sys.stdout)

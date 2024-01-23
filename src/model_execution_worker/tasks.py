@@ -455,8 +455,8 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         runRI = False  # this is dynamically set to True if ri compute is present in analysis_settings
 
         # Parse the analysis_settings file and extract key parameters:
-        # <TODO> Debug set to true. Set it to debug_worker later.
-        analysis_params = parse_analysis_settings_file(analysis_settings_file, debug=True)
+        # <TODO> Debug set to false. Set it to debug_worker later.
+        analysis_params = parse_analysis_settings_file(analysis_settings_file, debug=False)
 
         logging.info("Configuring REDCat run...")
 
@@ -544,17 +544,12 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
 
         run_ktools_end = generate_bash_script(nThread, runRI, 'run-ored-end.sh')
         run_ktools_complete = append_to_existing_file('run-ored-fifo-base.sh', run_ktools_end, 'run-ored-full.sh')
+        
         logging.info("Setting run-ored-full.sh privilages and running script...")
-        subprocess.call(["chmod", "+x", "run-ored-full.sh"])
+        subprocess.call(["chmod", "+x", run_ktools_complete])
         
         # Step-4C) Run run-ored-fifo.sh script
         subprocess.call([f"./{run_ktools_complete}"], cwd=run_dir)
-
-        # Step-4C) Run run-ored-fifo.sh script
-        logging.info("Contents of the input/ folder are:")
-        subprocess.call(["ls", "-a", run_dir+'/input'])
-        
-        # TODO #
         
         # Check if run-ored finished successfuylly!
         # TODO #
