@@ -448,15 +448,15 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         #  - model data at /home/worker/model/model_data/OasisRed/redcat
         #
         ##########################################################################
+        # Parse the analysis_settings file and extract key parameters:
+        # <TODO> Debug set to false. Set it to debug_worker later.
+        analysis_params = parse_analysis_settings_file(analysis_settings_file, debug=False)
+        
         nThread = 8
         oed_keys_dir = "/home/worker/model/model_data/OasisRed/redcat"
         redcat_model_data = "/home/worker/model/model_data/OasisRed/redcat"
         redcat_bins_dir = "/home/worker/model/src/redcat"
         runRI = False  # this is dynamically set to True if ri compute is present in analysis_settings
-
-        # Parse the analysis_settings file and extract key parameters:
-        # <TODO> Debug set to false. Set it to debug_worker later.
-        analysis_params = parse_analysis_settings_file(analysis_settings_file, debug=False)
 
         logging.info("Configuring REDCat run...")
 
