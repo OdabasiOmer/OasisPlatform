@@ -458,8 +458,6 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         nSamples = min(12, analysis_params.getint('default', 'number_of_samples', fallback=3))
         nThread = 8
         
-        logging.info("Number of samples set to -> " + nSamples)
-
         oed_keys_dir = "/home/worker/model/model_data/OasisRed/redcat"
         redcat_model_data = "/home/worker/model/model_data/OasisRed/redcat"
         redcat_bins_dir = "/home/worker/model/src/redcat"
@@ -535,9 +533,9 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         os.system(f'{redcat_bins_dir}/REDHazOQ -f redhazoq.cf')
 
         # Step-4A) Set upt redloss*.cf and HFL*.fls
+        set_number_of_samples(nSamples=nSamples, debug=dbg)
         partition_events(num_threads=nThread, base_fls_file='./work/maps_int/Interpolated.fls')
         partition_redloss_config(num_threads=nThread, base_cf_filepath='redloss.cf')
-        set_number_of_samples(nSamples=nSamples, debug=dbg)
         
         logging.info("Partitioned events for multi-threaded analysis.")
         

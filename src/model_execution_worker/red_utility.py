@@ -445,12 +445,20 @@ def set_number_of_samples(nSamples, debug=False):
     with open('redloss.cf', 'r') as file:
         content = file.readlines()
     # Iterate through each line of the base file and modify as required
+    new_content = []
     for line in content:
         if 'OPT_SIMACC' in line:
             key, _ = line.split(',')
             new_line = f"{key},{nSamples}\n"
             if debug:
                 logging.info(f'Successfully set the number of samples to {nSamples}')
+        else:
+            new_line = line
+        
+        new_content.append(new_line)
+        
+    with open('redloss.cf', 'w') as new_file:
+        new_file.writelines(new_content)
 
 def partition_redloss_config(num_threads, base_cf_filepath):
     """
