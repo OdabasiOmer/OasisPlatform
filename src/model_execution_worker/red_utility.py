@@ -432,6 +432,26 @@ def partition_events(num_threads, base_fls_file):
                 chunk_file.writelines(['./work/portfolio.grd\n'])
             chunk_file.writelines(chunk)
 
+def set_number_of_samples(nSamples, debug=False):
+    """
+    Function to modify the redloss.cf file in place, setting SIM_ACC to specified number.
+
+    Parameters:
+    base_cf_filepath (str): Path to the baseline configuration file (redloss.cf).
+    nSamples (int): Number of samples.
+    """
+
+    # Import the baseline configuration file
+    with open('redloss.cf', 'r') as file:
+        content = file.readlines()
+    # Iterate through each line of the base file and modify as required
+    for line in content:
+        if 'OPT_SIMACC' in line:
+            key, _ = line.split(',')
+            new_line = f"{key},{nSamples}\n"
+            if debug:
+                logging.info(f'Successfully set the number of samples to {nSamples}')
+
 def partition_redloss_config(num_threads, base_cf_filepath):
     """
     Function to create multiple redloss configuration files based on a baseline file.

@@ -449,10 +449,17 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         #
         ##########################################################################
         # Parse the analysis_settings file and extract key parameters:
-        # <TODO> Debug set to false. Set it to debug_worker later.
+        # <TODO> Debug set manually. Set it to debug_worker later.
+        
+        dbg=True
+        
         analysis_params = parse_analysis_settings_file(analysis_settings_file, debug=False)
         
+        nSamples = min(12, analysis_params.getint('default', 'number_of_samples', fallback=3))
         nThread = 8
+        
+        logging.info("Number of samples set to -> " + nSamples)
+
         oed_keys_dir = "/home/worker/model/model_data/OasisRed/redcat"
         redcat_model_data = "/home/worker/model/model_data/OasisRed/redcat"
         redcat_bins_dir = "/home/worker/model/src/redcat"
@@ -530,6 +537,8 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         # Step-4A) Set upt redloss*.cf and HFL*.fls
         partition_events(num_threads=nThread, base_fls_file='./work/maps_int/Interpolated.fls')
         partition_redloss_config(num_threads=nThread, base_cf_filepath='redloss.cf')
+        set_number_of_samples(nSamples=nSamples, debug=dbg)
+        
         logging.info("Partitioned events for multi-threaded analysis.")
         
         logging.info("Coppying over the occurrence file...")
