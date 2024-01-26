@@ -16,6 +16,52 @@ FIG_PARAMS      = {"f_size": (9.5, 6),
                    "label_size": 1.5,
                    "title_size": 0.5}
 
+def adjust_bounding_box(bounds):
+    # Constants
+    EARTH_RADIUS = 6371  # Earth's radius in kilometers
+    DEG_TO_RAD = 3.141592653589793 / 180  # Conversion factor from degrees to radians
+
+    # Extract the corner coordinates
+    lat_min = bounds['latitude_min']
+    lat_max = bounds['latitude_max']
+    lon_min = bounds['longitude_min']
+    lon_max = bounds['longitude_max']
+
+    # Calculate latitudinal and longitudinal distances in km (approximation)
+    lat_dist = EARTH_RADIUS * (lat_max - lat_min) * DEG_TO_RAD
+    lon_dist = EARTH_RADIUS * (lon_max - lon_min) * DEG_TO_RAD * abs(np.cos((lat_min + lat_max) / 2 * DEG_TO_RAD))
+
+    # Calculate aspect ratio
+    aspect_ratio = lon_dist / lat_dist
+
+    # Adjust the bounding box if the aspect ratio is outside the 0.5 to 2.0 range
+    if aspect_ratio < 0.5 or aspect_ratio > 2.0:
+        logging.info(f"Caution: Extreme The bounding box aspect ratio ({aspect_ratio}) defined by the input location is detected to be extreme. Readjusting the bounding box...")
+        if lat_dist > lon_dist:
+            # Extend the longitude span
+            new_lon_dist = lat_dist
+            center_lon = (lon_min + lon_max) / 2
+            delta_lon = (new_lon_dist / (EARTH_RADIUS * abs(np.cos((lat_min + lat_max) / 2 * DEG_TO_RAD)))) / DEG_TO_RAD
+            lon_min = center_lon - delta_lon / 2
+            lon_max = center_lon + delta_lon / 2
+        else:
+            # Extend the latitude span
+            new_lat_dist = lon_dist
+            center_lat = (lat_min + lat_max) / 2
+            delta_lat = (new_lat_dist / EARTH_RADIUS) / DEG_TO_RAD
+            lat_min = center_lat - delta_lat / 2
+            lat_max = center_lat + delta_lat / 2
+
+        # Update the bounding box
+        bounds = {
+            'latitude_min': lat_min,
+            'latitude_max': lat_max,
+            'longitude_min': lon_min,
+            'longitude_max': lon_max
+        }
+
+    return bounds
+
 def append_to_existing_file(existing_file_path, new_content, output_file_path):
     """
     Appends new content to an existing file and saves it as a new file.
@@ -292,7 +338,8 @@ def generate_bash_script(num_processes, runRI, output_filepath):
 def generate_uniform_grid(input_coord_file_path, grid_spacing, output_filepath):
     
     bounds = get_boundary_box(input_coord_file_path)
-    
+    bounds = adjust_bounding_box(bounds)
+
     # Open a CSV file to write the lat-lon data
     with open(output_filepath, 'w', newline='') as csvfile:
         grid_writer = csv.writer(csvfile)
