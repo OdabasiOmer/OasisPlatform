@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Important: Change this to model directory since it overwrites Dockerfile env variable!
-export OASIS_MODEL_DATA_DIR=/home/omer/GitHub/OasisRed/
+export OASIS_MODEL_DATA_DIR=/data/OasisRed/
 
 # Note: no need to redo api_server since we dont touch it
 #docker rmi coreoasis/api_server:latest
