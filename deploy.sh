@@ -12,6 +12,6 @@ docker rmi coreoasis/model_worker:latest
 
 # Note: Commenting this out because the worker container is built from inside the .yml 
 # based on Dockerfile.model_worker file, which is fine.
-# docker build -f Dockerfile.model_worker -t coreoasis/model_worker:1.28.0 .
+# docker build -f Dockerfile.model_worker -t coreoasis/model_worker:1.26.2 .
 
 docker-compose -f docker-compose.yml -f oasisui-docker-standalone.yml up -d

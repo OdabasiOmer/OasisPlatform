@@ -14,7 +14,7 @@ services:
       - rabbit
     environment:
       - OASIS_ADMIN_USER=reduser1000
-      - OASIS_ADMIN_PASS=3845965*_rUser
+      - OASIS_ADMIN_PASS=3845965ruser
       - OASIS_DEBUG=1
       - OASIS_RABBIT_HOST=rabbit
       - OASIS_RABBIT_PORT=5672
@@ -72,7 +72,7 @@ services:
       - ${OASIS_MEDIA_ROOT:-./docker-shared-fs}:/shared-fs:rw
   worker:
     restart: always
-    image: coreoasis/model_worker:1.28.0
+    image: coreoasis/model_worker:1.26.2
     build:
       context: .
       dockerfile: Dockerfile.model_worker
