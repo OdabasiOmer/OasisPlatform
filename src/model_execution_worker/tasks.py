@@ -499,6 +499,7 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         shutil.copy(os.path.join(oed_keys_dir,'occupancy_codes.csv'), './input/occupancy_codes.csv')
         shutil.copy(os.path.join(oed_keys_dir,'construction_codes.csv'), './input/')
         shutil.copy(os.path.join(oed_keys_dir,'oed_fields.csv'), './input/')
+        shutil.copy(os.path.join(oed_keys_dir,'numfloor_to_rise_dictionary.csv'), './input/')
         logging.info("Calling oredexp to generate REDCat propriety input portfolio.csv file")
 
         rcode = subprocess.call(["oredexp", "-i", './input/', '-o', './input/'])
