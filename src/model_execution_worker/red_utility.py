@@ -226,8 +226,7 @@ def generate_bash_script(num_processes, runRI, output_filepath):
 
     # <4> Parallel computation commands -> REDCAT 
     script.append("# --- Do REDCat computes ---")
-    script.append("touch output/redloss.log")
-    script.append(f"REDLoss -f redloss1.cf 2>> output/redloss.log &")
+    script.append(f"REDLoss -f redloss1.cf 2>> work/redcat.log &")
     for i in range(2, num_processes+1):
         script.append(f"REDLoss -f redloss{i}.cf &")
 
@@ -575,7 +574,7 @@ def run_getzones(zones_path, shortlist_zone_idx, ruptures_path, map_files_dir):
     if not process.returncode == 0:
         logging.info('stderr: {}'.format(stderr.decode()))
         logging.info('stdout: getzones econountered an error, exiting program!')
-        return False
+        return process.returncode
 
     shortlist_ruptures(rupture_zone_idx_file=ruptures_path,
                             shortlisted_zones_idx=shortlist_zone_idx,
@@ -584,7 +583,7 @@ def run_getzones(zones_path, shortlist_zone_idx, ruptures_path, map_files_dir):
     
     process.terminate()
 
-    return True
+    return process.returncode
 
 
 def make_dirs():
@@ -706,13 +705,13 @@ def setup_redcat_spatialcorr(coord_filepath, redcat_bins_dir, grid_size=0.025):
     generate_uniform_grid(coord_filepath, grid_size, './work/grid.csv')
     
     #b) Create .grd file:                               REDHazOQ -f redhazoq-creategrid.cf -> work/grid.csv
-    os.system(f'{bins}/REDHazOQ -f redhazoq-creategrid.cf')
+    os.system(f'{bins}/REDHazOQ -f redhazoq-creategrid.cf 2>> work/redcat.log')
     
     #c) Run REDField (create RF)                        REDField -f redfield-create.cf -> work/random-fields.rfd
-    os.system(f'{bins}/REDField -f redfield-create.cf')
+    os.system(f'{bins}/REDField -f redfield-create.cf 2>> work/redcat.log')
     
     #2) Interpolate: run REDField (interpol).               REDField -f redfield-int.cf (Save -> work/random-fields-int.rfd)
-    os.system(f'{bins}/REDField -f redfield-int.cf')
+    os.system(f'{bins}/REDField -f redfield-int.cf 2>> work/redcat.log')
     
     #3) Mod redloss.cf to add  OPT_RANDOMDATAFILE,work/random-fields-int.rfd
     msg = set_opt("redloss.cf", "OPT_RANDOMDATAFILE", 'work/random-fields-int.rfd')

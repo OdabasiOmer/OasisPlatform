@@ -479,6 +479,7 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         # WARNING: This is a cause of headaches.. I have to make sure that tasks.py doesnt get stuck inside the run_dir! 
         #TODO
         os.chdir(run_dir)
+        subprocess.call('touch work/redcat.log', shell=True)
         
         logging.info("Trying to change dir to run_dir. PWD:")
         subprocess.call(["pwd"])
@@ -502,12 +503,13 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         shutil.copy(os.path.join(oed_keys_dir,'numfloor_to_rise_dictionary.csv'), './input/')
         logging.info("Calling oredexp to generate REDCat propriety input portfolio.csv file")
 
-        rcode = subprocess.call(["oredexp", "-i", './input/', '-o', './input/'])
+        rcode = subprocess.call("oredexp -i ./input/ -o ./input/ >> work/redcat.log", shell=True)
+        
         if not rcode == 0:
             logging.info('An error occurred running oredexp.')
             logging.info('stderr: {}'.format(stderr.decode()))
 
-        # Step-0) <pre-REDCat> Input validation
+        # Step-0c) <pre-REDCat> Input validation
         # TODO
 
 
@@ -515,9 +517,9 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         fetch_coordinates_from_location_file('input/location.csv',
                                              'work/coordinates.txt')
         
-        os.system(f'{redcat_bins_dir}/REDExp -f redexp.cf')
+        os.system(f'{redcat_bins_dir}/REDExp -f redexp.cf >> work/redcat.log')
 
-        # Step-3) <pre-REDLoss> Run REDField
+        # Step-2) <pre-REDLoss> Run REDField
         setup_redcat_spatialcorr(coord_filepath='work/coordinates.txt',
                                  redcat_bins_dir=redcat_bins_dir)
         
@@ -528,12 +530,14 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         ruptures_path = os.path.join(redcat_model_data, 'ruptures.idx')
 
         # 3A) Execute getzones program
-        success = run_getzones(zones_path, shortlist_zone_idx, ruptures_path, map_files_dir)
+        returncode = run_getzones(zones_path, shortlist_zone_idx, ruptures_path, map_files_dir)
+        if not returncode == 0:
+            proc.returncode = returncode
         
-        # Step-X) REDHazOQ
-        os.system(f'{redcat_bins_dir}/REDHazOQ -f redhazoq.cf')
+        # Step-4) REDHazOQ
+        os.system(f'{redcat_bins_dir}/REDHazOQ -f redhazoq.cf 2>> work/redcat.log')
 
-        # Step-4A) Set upt redloss*.cf and HFL*.fls
+        # Step-5A) Set upt redloss*.cf and HFL*.fls
         set_number_of_samples(nSamples=nSamples, debug=dbg)
         partition_events(num_threads=nThread, base_fls_file='./work/maps_int/Interpolated.fls')
         partition_redloss_config(num_threads=nThread, base_cf_filepath='redloss.cf')
@@ -544,7 +548,7 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         shutil.copy(os.path.join(redcat_model_data,'occurrence.csv'),
                     os.path.join(run_dir, 'input'))
         
-        # Step-4B) Set up run-ored-fifo.sh script
+        # Step-5B) Set up run-ored-fifo.sh script
         if analysis_params.has_option('default', 'ri_output'):
             if analysis_params.getboolean('default', 'ri_output', fallback=False):
                 logging.info("Reinsurance compute requested, configuring accordingly...")
@@ -556,11 +560,16 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         logging.info("Setting run-ored-full.sh privilages and running script...")
         subprocess.call(["chmod", "+x", run_ktools_complete])
         
-        # Step-4C) Run run-ored-fifo.sh script
+        # Step-5C) Run run-ored-fifo.sh script
         subprocess.call([f"./{run_ktools_complete}"], cwd=run_dir)
-        
-        # Check if run-ored finished successfuylly!
-        # TODO #
+        shutil.copy('work/redcat.log', 'output')
+                
+        # Check if run-ored finished successfuylly! [TODO: to be moved inside a red_utility function later]
+        # i) Method #1: Dumdum
+        if not os.path.exists('./work/lossout/GM_Sim_000000.aal'):
+            proc.returncode=1
+            
+        # -------------------------------------------------------------------
 
         os.chdir("/home/worker")
         logging.info("Changing back to /home/worker. PWD:")
