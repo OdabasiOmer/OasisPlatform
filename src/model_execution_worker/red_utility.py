@@ -90,11 +90,68 @@ def check_redcat_completion(folder_dir):
     # Search for files with pattern 'GM*.aal' in the current directory
     for file in os.listdir(folder_dir):
         if file.startswith('GM') and file.endswith('.aal'):
-            return True
+            return 0
         if file.endswith('.epc'):
-            return True
-    return False
+            return 0
+    return 1
 
+
+def checkForInvalidConstructionCode(inputFile, lookup_field, fallback_value, illegal_codes_file='./input/illegal-construction-codes.txt'):
+    """
+    Cleans data in a specified CSV column by replacing illegal entries with a fallback value.
+
+    Parameters:
+    - inputFile (str):          Path to the input CSV file.
+    - illegal_codes_file (str): Path to the text file containing illegal codes, one per line.
+    - lookup_field (str):       The name of the column in the CSV to check for illegal entries.
+    - fallback_value (any):     The value to replace illegal entries with.
+
+    Returns:
+    int: 0 if no illegal entries are found and replaced, 1 otherwise.
+    """
+    try:
+        # Step 1: Read the specified input CSV file
+        df = pd.read_csv(inputFile)
+        
+        # Step 2: Read the single column text file containing illegal codes/strings
+        with open(illegal_codes_file, 'r') as file:
+            illegal_codes = [int(line.strip()) for line in file if line.strip().isdigit()]
+               
+        # Step 3: Extract the column of data based on the lookup field
+        if lookup_field not in df.columns:
+            print(f"Error: {lookup_field} not found in the input CSV file.")
+            return 1  # Return 1 to indicate error
+        
+        data_column = df[lookup_field]
+        
+        # Ensure data_column is of integer type for comparison with illegal_codes
+        if data_column.dtype != 'int':
+            try:
+                data_column = data_column.astype(int)
+            except ValueError:
+                print(f"Error: Cannot convert {lookup_field} column to integers.")
+                return 1  # Return 1 to indicate error in type conversion
+        
+        # Step 4: Check for illegal entries in the data column
+        illegal_entries_found = False
+        # Create a mask for all rows that contain any of the illegal codes
+        mask = data_column.isin(illegal_codes)
+        if mask.any():
+            illegal_entries_found = True
+            logging.info('WARNING: Illegal ConstructionCode entries are found!')
+            # Replace all occurrences of illegal codes with the fallback value
+            df.loc[mask, lookup_field] = fallback_value
+        
+        # Step 6: Overwrite the original input file with the modified content
+        df.to_csv(inputFile, index=False)
+        
+        # Step 6 (continued): Return code based on whether illegal entries were encountered
+        return 1 if illegal_entries_found else 0
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return 1  # Return 1 to indicate error
+     
 
 def copy_files(src_directory, dst_directory):
     """
@@ -127,6 +184,144 @@ def delete_lines_from_file(file_path, start_line, end_line):
                     file.write(line)
     except Exception as e:
         print(f"An error occurred: {e}")
+
+# WIP #
+def georeference(inputLocationFilePath, outputFilePath, inputDataDir):
+    ## IMPORT FILES ##
+    # CAPs
+    folder = inputDataDir
+    files_raw = os.listdir(folder)
+    version = "_CUL_r3.txt"
+    files = []
+    for f in files_raw:
+        if version in f:
+            files.append(f)
+    CAPs = pd.read_csv(folder + files[0], sep="\t", dtype=str)
+
+    # nations
+    nations = pd.read_csv(
+        f"{inputDataDir}/nations.txt",
+        index_col=[0],
+    )
+
+    ## ANALYSIS ##
+    log = open(inputLocationFilePath + "-log.txt", "w+")
+    data_in = pd.read_csv(inputLocationFilePath, dtype=str)
+    data_in.fillna('', inplace=True)
+
+    errors = pd.DataFrame(
+        np.array(
+            [
+                "[ERROR] PostalCode and Coordinates Columns Missing",
+                "[ERROR] Invalid PostalCode",
+                "[ERROR] Invalid CountryCode",
+                "[ERROR] Total",
+                "[WARNING] Coordinates Columns Missing",
+                "[WARNING] PostalCode = 0",
+                "[WARNING] Coordinates = 0",
+                "[WARNING] Total",
+            ]
+        ),
+        columns=["ErrType"],
+    )
+    errors["ErrNumber"] = 0
+
+    if "Longitude" not in data_in.columns and "PostalCode" in data_in.columns:
+        logging.info("---WARNING: Longitude and Latitude columns not provided---" + "\n")
+        logging.info("Coordinates set from Postal Code" + "\n")
+        errors["ErrNumber"].loc[4] += 1
+
+        data_in["Latitude"] = 0
+        data_in["Longitude"] = 0
+
+        for i in data_in.index:
+            CAPs = []
+            try:
+                nation = nations.Country[data_in.CountryCode[i]]
+                CAPs = pd.read_csv(folder + nation + version, sep="\t", dtype=str)
+                CAPs.index = CAPs.CUL
+                CAP = data_in.PostalCode[i]
+            except:
+                logging.error(
+                    data_in.PortNumber[i]
+                    + " "
+                    + data_in.LocNumber[i]
+                    + " "
+                    + ": country not in database ("
+                    + nation
+                    + ")\n"
+                )
+                errors["ErrNumber"].loc[2] += 1
+                return 1
+                
+            if len(CAPs) > 0:
+                try:
+                    data_in["Latitude"][i] = CAPs.LATITUDE[CAP][0]
+                    data_in["Longitude"][i] = CAPs.LONGITUDE[CAP][0]
+                except:
+                    logging.error(
+                        data_in.PortNumber[i] + ": ZIP not in database (" + CAP + ")\n"
+                    )
+                    errors["ErrNumber"].loc[1] += 1
+                    return 1
+
+    elif "Longitude" not in data_in.columns and "PostalCode" not in data_in.columns:
+        logging.error(
+            "***ERROR***: both coordinates and postal code are missing, impossible to set coordinate***"
+            + "\n"
+        )
+        errors["ErrNumber"].loc[0] += 1
+        return 1
+
+    else:
+        for i in data_in.index:
+            if data_in["Latitude"][i] == '' or data_in["Longitude"][i] == '':
+                CAPs = []
+                try:
+                    nation = nations.Country[data_in.CountryCode[i]]
+                    CAPs = pd.read_csv(folder + nation + version, sep="\t", dtype=str)
+                    CAPs.index = CAPs.CUL
+                    CAP = data_in.PostalCode[i]
+                except:
+                    logging.info(
+                        data_in.PortNumber[i]
+                        + ": country not in database ("
+                        + nation
+                        + ")\n"
+                    )
+                    errors["ErrNumber"].loc[2] += 1
+                    logging.error('Georeferencer: Country error')
+                    return 1
+
+                if len(CAPs) > 0:
+                    try:
+                        data_in["Latitude"][i] = str(np.mean(CAPs.LATITUDE[CAP].astype(float).values))
+                        data_in["Longitude"][i] = str(np.mean(CAPs.LONGITUDE[CAP].astype(float).values))
+                        logging.info(
+                            data_in.PortNumber[i]
+                            + ": coordinates not provided, set from Postal Code code\n"
+                        )
+                        errors["ErrNumber"].loc[6] += 1
+                    except:
+                        logging.error(
+                            data_in.PortNumber[i]
+                            + ": ZIP not in database ("
+                            + CAP
+                            + ")\n"
+                        )
+                        errors["ErrNumber"].loc[1] += 1
+                        return 1
+            elif data_in.PostalCode[i] == "0":
+                logging.info("WARNING, PostalCode missing\n")
+                errors["ErrNumber"].loc[5] += 1  
+                
+    errors["ErrNumber"].loc[7] = sum(errors["ErrNumber"].values[4::])
+    errors["ErrNumber"].loc[2] = sum(errors["ErrNumber"].values[0:4])
+    errors.to_csv(inputLocationFilePath + "_errors.txt", index=False)
+    data_in.to_csv(outputFilePath, index=False)
+    log.close()
+    return 0
+
 
 def generate_bash_script(num_processes, runRI, output_filepath):
     """

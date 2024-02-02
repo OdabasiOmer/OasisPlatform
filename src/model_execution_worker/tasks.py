@@ -464,10 +464,7 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         runRI = False  # this is dynamically set to True if ri compute is present in analysis_settings
 
         logging.info("Configuring REDCat run...")
-
-        subprocess.call(["pwd"])
-        subprocess.call(["ls", "-l"])
-        
+       
         # Copy the base (initial/static) part of the custom runner script run-ored-fifo.sh over to run_dir.
         shutil.copy('/home/worker/model/run-ored-fifo-base.sh', os.path.join(run_dir, 'run-ored-fifo-base.sh'))
         logging.info("Copied run-ored-fifo.sh over. The contents of run_dir:")
@@ -483,7 +480,6 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         
         logging.info("Trying to change dir to run_dir. PWD:")
         subprocess.call(["pwd"])
-        subprocess.call(["ls"])
 
         logging.info("Setting run-ored-fifo.sh privilages and running scriiipt...")
         subprocess.call(["chmod", "+x", "run-ored-fifo-base.sh"])
@@ -501,76 +497,84 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         shutil.copy(os.path.join(oed_keys_dir,'construction_codes.csv'), './input/')
         shutil.copy(os.path.join(oed_keys_dir,'oed_fields.csv'), './input/')
         shutil.copy(os.path.join(oed_keys_dir,'numfloor_to_rise_dictionary.csv'), './input/')
+
+        # Step-0) <pre-REDCat> Input validation       
+        # a) Input validation | Part I. ***************
+        returncode = checkForInvalidConstructionCode('./input/location.csv', 
+                                                    'ConstructionCode', 
+                                                    5000, 
+                                                    illegal_codes_file=os.path.join(oed_keys_dir,'illegal-construction-codes.txt'))
+        if returncode != 0:
+            logging.warning("Invalid ConstructionCode values encountered. Setting them to Unknown (OED Code 5000).")
+
+        # b) Input conversion: OED -> RED  ***************************
         logging.info("Calling oredexp to generate REDCat propriety input portfolio.csv file")
+        try:
+            returncode = subprocess.call("oredexp -i ./input/ -o ./input/ >> work/redcat.log", shell=True)
+        except Exception as e:
+            returncode = -2
+            logging.error(f"An error occurred running oredexp: {e}")
 
-        rcode = subprocess.call("oredexp -i ./input/ -o ./input/ >> work/redcat.log", shell=True)
-        
-        if not rcode == 0:
-            logging.info('An error occurred running oredexp.')
-            logging.info('stderr: {}'.format(stderr.decode()))
+        if returncode == 0:
+            # Step-1) <pre-REDCat> Define boundary area for analysis and run REDExp.
+            fetch_coordinates_from_location_file('input/location.csv',
+                                                 'work/coordinates.txt')
+            
+            os.system(f'{redcat_bins_dir}/REDExp -f redexp.cf >> work/redcat.log')
 
-        # Step-0c) <pre-REDCat> Input validation
-        # TODO
+            # Step-2) <pre-REDLoss> Run REDField
+            setup_redcat_spatialcorr(coord_filepath='work/coordinates.txt',
+                                     redcat_bins_dir=redcat_bins_dir)
+            
+            # Step-3) <pre-Loss> Shortlist ruptures that need to be considered in analysis
+            map_files_dir = os.path.join(redcat_model_data, 'maps_bin')
+            shortlist_zone_idx = './work/shortlisted_zones.idx'  # to be created by getzones
+            zones_path = os.path.join(redcat_model_data, 'zones.idx')
+            ruptures_path = os.path.join(redcat_model_data, 'ruptures.idx')
 
-
-        # Step-1) <pre-REDCat> Define boundary area for analysis and run REDExp.
-        fetch_coordinates_from_location_file('input/location.csv',
-                                             'work/coordinates.txt')
-        
-        os.system(f'{redcat_bins_dir}/REDExp -f redexp.cf >> work/redcat.log')
-
-        # Step-2) <pre-REDLoss> Run REDField
-        setup_redcat_spatialcorr(coord_filepath='work/coordinates.txt',
-                                 redcat_bins_dir=redcat_bins_dir)
-        
-        # Step-3) <pre-Loss> Shortlist ruptures that need to be considered in analysis
-        map_files_dir = os.path.join(redcat_model_data, 'maps_bin')
-        shortlist_zone_idx = './work/shortlisted_zones.idx'  # to be created by getzones
-        zones_path = os.path.join(redcat_model_data, 'zones.idx')
-        ruptures_path = os.path.join(redcat_model_data, 'ruptures.idx')
-
-        # 3A) Execute getzones program
-        returncode = run_getzones(zones_path, shortlist_zone_idx, ruptures_path, map_files_dir)
-        if not returncode == 0:
-            proc.returncode = returncode
-        
-        # Step-4) REDHazOQ
-        os.system(f'{redcat_bins_dir}/REDHazOQ -f redhazoq.cf 2>> work/redcat.log')
-
-        # Step-5A) Set upt redloss*.cf and HFL*.fls
-        set_number_of_samples(nSamples=nSamples, debug=dbg)
-        partition_events(num_threads=nThread, base_fls_file='./work/maps_int/Interpolated.fls')
-        partition_redloss_config(num_threads=nThread, base_cf_filepath='redloss.cf')
-        
-        logging.info("Partitioned events for multi-threaded analysis.")
-        
-        logging.info("Coppying over the occurrence file...")
-        shutil.copy(os.path.join(redcat_model_data,'occurrence.csv'),
-                    os.path.join(run_dir, 'input'))
-        
-        # Step-5B) Set up run-ored-fifo.sh script
-        if analysis_params.has_option('default', 'ri_output'):
-            if analysis_params.getboolean('default', 'ri_output', fallback=False):
-                logging.info("Reinsurance compute requested, configuring accordingly...")
-                runRI=True
-
-        run_ktools_end = generate_bash_script(nThread, runRI, 'run-ored-end.sh')
-        run_ktools_complete = append_to_existing_file('run-ored-fifo-base.sh', run_ktools_end, 'run-ored-full.sh')
-        
-        logging.info("Setting run-ored-full.sh privilages and running script...")
-        subprocess.call(["chmod", "+x", run_ktools_complete])
-        
-        # Step-5C) Run run-ored-fifo.sh script
-        subprocess.call([f"./{run_ktools_complete}"], cwd=run_dir)
-        shutil.copy('work/redcat.log', 'output')
+            # 3A) Execute getzones program
+            returncode = run_getzones(zones_path, shortlist_zone_idx, ruptures_path, map_files_dir)
                 
-        # Check if run-ored finished successfuylly! [TODO: to be moved inside a red_utility function later]
-        # i) Method #1: Dumdum
-        if not os.path.exists('./work/lossout/GM_Sim_000000.aal'):
-            proc.returncode=1
+            # Step-4) REDHazOQ
+            os.system(f'{redcat_bins_dir}/REDHazOQ -f redhazoq.cf 2>> work/redcat.log')
+
+            # Step-5A) Set upt redloss*.cf and HFL*.fls
+            set_number_of_samples(nSamples=nSamples, debug=dbg)
+            partition_events(num_threads=nThread, base_fls_file='./work/maps_int/Interpolated.fls')
+            partition_redloss_config(num_threads=nThread, base_cf_filepath='redloss.cf')
+            
+            logging.info("Partitioned events for multi-threaded analysis.")
+            
+            logging.info("Coppying over the occurrence file...")
+            shutil.copy(os.path.join(redcat_model_data,'occurrence.csv'),
+                        os.path.join(run_dir, 'input'))
+            
+            # Step-5B) Set up run-ored-fifo.sh script
+            if analysis_params.has_option('default', 'ri_output'):
+                if analysis_params.getboolean('default', 'ri_output', fallback=False):
+                    logging.info("Reinsurance compute requested, configuring accordingly...")
+                    runRI=True
+
+            run_ktools_end = generate_bash_script(nThread, runRI, 'run-ored-end.sh')
+            run_ktools_complete = append_to_existing_file('run-ored-fifo-base.sh', run_ktools_end, 'run-ored-full.sh')
+            
+            logging.info("Setting run-ored-full.sh privilages and running script...")
+            subprocess.call(["chmod", "+x", run_ktools_complete])
+            
+            # Step-5C) Run run-ored-fifo.sh script
+            subprocess.call([f"./{run_ktools_complete}"], cwd=run_dir)
+            shutil.copy('work/redcat.log', 'output')
+            shutil.copy('input/portfolio.csv', 'output')
+                    
+            # Check if run-ored finished successfully:
+            returncode = check_redcat_completion('./work/lossout')
+            if not returncode == 0:
+                logging.error("REDCat did not run successfully, check the error log!") 
             
         # -------------------------------------------------------------------
-
+        
+        proc.returncode = returncode
+        
         os.chdir("/home/worker")
         logging.info("Changing back to /home/worker. PWD:")
         subprocess.call(["pwd"])
@@ -691,6 +695,20 @@ def generate_input(self,
             run_args += ['--verbose']
 
 
+        # Georeference location.csv ****
+        returncode = 0
+        shutil.copy(location_file, './location.csv')
+        try:
+            logging.info('Checking for georeferencing...')
+            returncode = georeference(location_file, 
+                                      location_file, 
+                                      '/home/worker/model/model_data/OasisRed/redcat/georeferencing/')
+        except:
+            returncode = 1
+            logging.error('Georeferencing attempt failed. Verify your input and resubmit!')
+        if returncode == 0:
+            logging.info('Georeferencing applied.')
+
         # Log MDK generate command
         args_list = run_args + [''] if (len(run_args) % 2) else run_args
         mdk_args = [x for t in list(zip(*[iter(args_list)] * 2)) if None not in t for x in t]
@@ -710,6 +728,10 @@ def generate_input(self,
             preexec_fn=os.setsid, # run in a new session, assigning a new process group to it and its children.
         )
         stdout, stderr = proc.communicate()
+        
+        # Restore original location file back - in the Portfolio Input section (Choose Portfolio)
+        shutil.copy('./location.csv', location_file)
+        os.remove('location.csv')
 
         # Log output and close
         if debug_worker:
