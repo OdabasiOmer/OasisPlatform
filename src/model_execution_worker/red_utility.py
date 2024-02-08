@@ -20,6 +20,7 @@ def adjust_bounding_box(bounds):
     # Constants
     EARTH_RADIUS = 6371  # Earth's radius in kilometers
     DEG_TO_RAD = 3.141592653589793 / 180  # Conversion factor from degrees to radians
+    LAT_LON_DIST_FALLBACK = 0.5
 
     # Extract the corner coordinates
     lat_min = bounds['latitude_min']
@@ -28,8 +29,12 @@ def adjust_bounding_box(bounds):
     lon_max = bounds['longitude_max']
 
     # Calculate latitudinal and longitudinal distances in km (approximation)
-    lat_dist = EARTH_RADIUS * (lat_max - lat_min) * DEG_TO_RAD
-    lon_dist = EARTH_RADIUS * (lon_max - lon_min) * DEG_TO_RAD * abs(np.cos((lat_min + lat_max) / 2 * DEG_TO_RAD))
+    if abs(lat_min - lat_max) <= 0.01 or abs(lon_min - lon_max) <= 0.01:
+        lat_dist = EARTH_RADIUS * 0.2 * DEG_TO_RAD
+        lon_dist = EARTH_RADIUS * (0.2) * DEG_TO_RAD * abs(np.cos((lat_min + lat_max) / 2 * DEG_TO_RAD))
+    else:
+        lat_dist = EARTH_RADIUS * (lat_max - lat_min) * DEG_TO_RAD
+        lon_dist = EARTH_RADIUS * (lon_max - lon_min) * DEG_TO_RAD * abs(np.cos((lat_min + lat_max) / 2 * DEG_TO_RAD))
 
     # Calculate aspect ratio
     aspect_ratio = lon_dist / lat_dist
@@ -567,6 +572,13 @@ def get_boundary_box(file_path):
     lon_min = data['longitude'].min()
     lon_max = data['longitude'].max()
 
+    # Enlarge grid in case its too small (otherwise it causes issues creating random fields).
+    if abs(lat_min - lat_max) <= 0.1 or abs(lon_min - lon_max) <= 0.1:
+        lat_min = lat_min - 0.15
+        lat_max = lat_max + 0.15
+        lon_min = lon_min - 0.15
+        lon_max = lon_max - 0.15
+
     return {
         'latitude_min': lat_min,
         'latitude_max': lat_max,
@@ -771,6 +783,8 @@ def run_getzones(zones_path, shortlist_zone_idx, ruptures_path, map_files_dir):
         logging.info('stdout: getzones econountered an error, exiting program!')
         return process.returncode
 
+    logging.info('getzones: {}'.format(stdout.decode()))
+
     shortlist_ruptures(rupture_zone_idx_file=ruptures_path,
                             shortlisted_zones_idx=shortlist_zone_idx,
                             map_files_dir=map_files_dir,
@@ -900,13 +914,16 @@ def setup_redcat_spatialcorr(coord_filepath, redcat_bins_dir, grid_size=0.025):
     generate_uniform_grid(coord_filepath, grid_size, './work/grid.csv')
     
     #b) Create .grd file:                               REDHazOQ -f redhazoq-creategrid.cf -> work/grid.csv
-    os.system(f'{bins}/REDHazOQ -f redhazoq-creategrid.cf 2>> work/redcat.log')
+    command = f'{bins}/REDHazOQ -f redhazoq-creategrid.cf 2>&1 | tee -a work/redcat.log'
+    os.system(command)
     
     #c) Run REDField (create RF)                        REDField -f redfield-create.cf -> work/random-fields.rfd
-    os.system(f'{bins}/REDField -f redfield-create.cf 2>> work/redcat.log')
+    command = f'{bins}/REDField -f redfield-create.cf 2>&1 | tee -a work/redcat.log'
+    os.system(command)
     
     #2) Interpolate: run REDField (interpol).               REDField -f redfield-int.cf (Save -> work/random-fields-int.rfd)
-    os.system(f'{bins}/REDField -f redfield-int.cf 2>> work/redcat.log')
+    command = f'{bins}/REDField -f redfield-int.cf 2>&1 | tee -a work/redcat.log'
+    os.system(command)
     
     #3) Mod redloss.cf to add  OPT_RANDOMDATAFILE,work/random-fields-int.rfd
     msg = set_opt("redloss.cf", "OPT_RANDOMDATAFILE", 'work/random-fields-int.rfd')
