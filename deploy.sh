@@ -16,3 +16,4 @@ docker rmi coreoasis/model_worker:1.26.2
 # docker build -f Dockerfile.model_worker -t coreoasis/model_worker:1.26.2 .
 
 docker-compose -f docker-compose.yml -f oasisui-docker-standalone.yml up -d
+docker-compose -f portainer.yaml up -d
