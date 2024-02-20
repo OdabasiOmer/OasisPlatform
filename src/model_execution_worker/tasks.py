@@ -515,10 +515,13 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
             returncode = -2
             logging.error(f"An error occurred running oredexp: {e}")
 
+        # Step-1) <pre-REDCat> Define boundary area for analysis and run REDExp.
+        outPath = fetch_coordinates_from_location_file('input/location.csv',
+                                                        'work/coordinates.txt')
+        if not outPath:
+            returncode = 1
+        
         if returncode == 0:
-            # Step-1) <pre-REDCat> Define boundary area for analysis and run REDExp.
-            fetch_coordinates_from_location_file('input/location.csv',
-                                                 'work/coordinates.txt')
             
             os.system(f'{redcat_bins_dir}/REDExp -f redexp.cf >> work/redcat.log')
 

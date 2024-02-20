@@ -100,6 +100,17 @@ def check_redcat_completion(folder_dir):
             return 0
     return 1
 
+def check_if_single_location(df):
+    
+    are_latitudes_same = df['Latitude'].nunique() == 1
+    are_longitudes_same = df['Longitude'].nunique() == 1
+
+    if are_latitudes_same and are_longitudes_same:
+        print("All values in the 'Latitude' column are the same.")
+        return -1
+    
+    return 0
+    
 
 def checkForInvalidConstructionCode(inputFile, lookup_field, fallback_value, illegal_codes_file='./input/illegal-construction-codes.txt'):
     """
@@ -326,7 +337,6 @@ def georeference(inputLocationFilePath, outputFilePath, inputDataDir):
     data_in.to_csv(outputFilePath, index=False)
     log.close()
     return 0
-
 
 def generate_bash_script(num_processes, runRI, output_filepath):
     """
@@ -628,10 +638,8 @@ def log_to_file(message, file, echo=True):
     print(message)  # Write the message to the log file
     sys.stdout = original_stdout  # Restore the original stdout stream
 
-
 def log_to_console(message):
     print(message)  # Write the message to the console
-
 
 def get_non_underscore_folders():
     cwd = os.getcwd()
@@ -793,7 +801,6 @@ def run_getzones(zones_path, shortlist_zone_idx, ruptures_path, map_files_dir):
     process.terminate()
 
     return process.returncode
-
 
 def make_dirs():
     if not os.path.exists('output'):
@@ -1195,7 +1202,13 @@ def filter_exposure_by_coordinates(filepath, _lon_range, _lat_range, output_file
 def fetch_coordinates_from_location_file(filepath, out_filepath):
     # Reading the CSV file into a DataFrame
     df = pd.read_csv(filepath, delimiter=',')
-
+    
+    # Validate input
+    returncode = check_if_single_location(df)
+    if not returncode == 0:
+        logging.error('Encountered a single-location portfolio input!')
+        return ''
+    
     # Filtering only 'LON' and 'LAT' columns. Again whitespaces are there on purpose..,..
     filtered_df = df[['Longitude', 'Latitude']]
 
