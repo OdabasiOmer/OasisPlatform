@@ -438,7 +438,7 @@ def generate_bash_script(num_processes, runRI, output_filepath):
     script.append("# --- Do REDCat computes ---")
     script.append(f"REDLoss -f redloss1.cf 2>> work/redcat.log &")
     for i in range(2, num_processes+1):
-        script.append(f"REDLoss -f redloss{i}.cf &")
+        script.append(f"REDLoss -f redloss{i}.cf > /dev/null 2>&1 &")
 
     script.append(f"ls -a")
     script.append(f"check_fifo_x")
