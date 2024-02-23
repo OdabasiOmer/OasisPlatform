@@ -456,7 +456,7 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         analysis_params = parse_analysis_settings_file(analysis_settings_file, debug=False)
         
         nSamples = min(12, analysis_params.getint('default', 'number_of_samples', fallback=3))
-        nThread = 40
+        nThread = 24
         
         oed_keys_dir = "/home/worker/model/model_data/OasisRed/redcat"
         redcat_model_data = "/home/worker/model/model_data/OasisRed/redcat"
