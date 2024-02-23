@@ -451,12 +451,12 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         # Parse the analysis_settings file and extract key parameters:
         # <TODO> Debug set manually. Set it to debug_worker later.
         
-        dbg=True
+        dbg=False
         
         analysis_params = parse_analysis_settings_file(analysis_settings_file, debug=False)
         
         nSamples = min(12, analysis_params.getint('default', 'number_of_samples', fallback=3))
-        nThread = 24
+        nThread = 32
         
         oed_keys_dir = "/home/worker/model/model_data/OasisRed/redcat"
         redcat_model_data = "/home/worker/model/model_data/OasisRed/redcat"
@@ -470,18 +470,19 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         logging.info("Copied run-ored-fifo.sh over. The contents of run_dir:")
         subprocess.call(["ls",run_dir])
 
-        logging.info("The contents of run_dir/input instead:")
-        subprocess.call(["ls",run_dir + "/input"])
-        
-        # WARNING: This is a cause of headaches.. I have to make sure that tasks.py doesnt get stuck inside the run_dir! 
-        #TODO
+        if dbg:
+            logging.info("The contents of run_dir/input instead:")
+            subprocess.call(["ls",run_dir + "/input"])
+
+        # >>> Change dir to run_dir
         os.chdir(run_dir)
         subprocess.call('touch work/redcat.log', shell=True)
         
-        logging.info("Trying to change dir to run_dir. PWD:")
-        subprocess.call(["pwd"])
-
-        logging.info("Setting run-ored-fifo.sh privilages and running scriiipt...")
+        if dbg:
+            logging.info("Trying to change dir to run_dir. PWD:")
+            subprocess.call(["pwd"])
+            logging.info("Setting run-ored-fifo.sh privilages and running scriiipt...")
+        
         subprocess.call(["chmod", "+x", "run-ored-fifo-base.sh"])
         
         # Step-0a) Copy over REDCat .cf files
@@ -523,7 +524,7 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         
         if returncode == 0:
             
-            os.system(f'{redcat_bins_dir}/REDExp -f redexp.cf >> work/redcat.log')
+            os.system(f'{redcat_bins_dir}/REDExp -f redexp.cf 2>&1 | tee -a work/redcat.log')
 
             # Step-2) <pre-REDLoss> Run REDField
             setup_redcat_spatialcorr(coord_filepath='work/coordinates.txt',
@@ -541,7 +542,6 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
             # Step-4) REDHazOQ
             command = f'{redcat_bins_dir}/REDHazOQ -f redhazoq.cf 2>&1 | tee -a work/redcat.log'
             os.system(command)
-            #os.system(f'{redcat_bins_dir}/REDHazOQ -f redhazoq.cf 2>> work/redcat.log')
 
             # Step-5A) Set upt redloss*.cf and HFL*.fls
             set_number_of_samples(nSamples=nSamples, debug=dbg)
@@ -563,13 +563,15 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
             run_ktools_end = generate_bash_script(nThread, runRI, 'run-ored-end.sh')
             run_ktools_complete = append_to_existing_file('run-ored-fifo-base.sh', run_ktools_end, 'run-ored-full.sh')
             
-            logging.info("Setting run-ored-full.sh privilages and running script...")
+            if dbg:
+                logging.info("Setting run-ored-full.sh privilages and running script...")
             subprocess.call(["chmod", "+x", run_ktools_complete])
             
             # Step-5C) Run run-ored-fifo.sh script
             subprocess.call([f"./{run_ktools_complete}"], cwd=run_dir)
-            shutil.copy('work/redcat.log', 'output')
-            shutil.copy('input/portfolio.csv', 'output')
+            if dbg:
+                shutil.copy('work/redcat.log', 'output')
+                shutil.copy('input/portfolio.csv', 'output')
                     
             # Check if run-ored finished successfully:
             returncode = check_redcat_completion('./work/lossout')
@@ -583,7 +585,6 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         os.chdir("/home/worker")
         logging.info("Changing back to /home/worker. PWD:")
         subprocess.call(["pwd"])
-        subprocess.call(["ls"])
 
         # ----------------------------------------------------------------------
         # End of REDCat integration
