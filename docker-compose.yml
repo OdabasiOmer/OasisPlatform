@@ -2,10 +2,7 @@ version: "3"
 services:
   server:
     restart: always
-    image: coreoasis/api_server:latest
-    build:
-      context: .
-      dockerfile: Dockerfile.api_server
+    image: coreoasis/api_server:1.26.6
     ports:
       - 8000:8000
     links:
@@ -13,8 +10,8 @@ services:
       - celery-db
       - rabbit
     environment:
-      - OASIS_ADMIN_USER=reduser1000
-      - OASIS_ADMIN_PASS=3845965ruser
+      - OASIS_ADMIN_USER=admin
+      - OASIS_ADMIN_PASS=password
       - OASIS_DEBUG=1
       - OASIS_RABBIT_HOST=rabbit
       - OASIS_RABBIT_PORT=5672
@@ -36,7 +33,7 @@ services:
       - ${OASIS_MEDIA_ROOT:-./docker-shared-fs}:/shared-fs:rw
   worker-monitor:
     restart: always
-    image: coreoasis/api_server:latest
+    image: coreoasis/api_server:1.26.6
     command:
       [
         wait-for-server,
@@ -95,7 +92,7 @@ services:
       - OASIS_CELERY_DB_PORT=3306
       - OASIS_MODEL_DATA_DIRECTORY=/home/worker/model
     volumes:
-      - ${OASIS_MODEL_DATA_DIR:-/data/OasisRed}:/home/worker/model:rw
+      - ${OASIS_MODEL_DATA_DIR:-/home/ubuntu/Oasis/OasisRed}:/home/worker/model:rw
       - ${OASIS_MEDIA_ROOT:-./docker-shared-fs}:/shared-fs:rw
   server-db:
     restart: always
