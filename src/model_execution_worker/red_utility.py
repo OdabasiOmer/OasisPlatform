@@ -436,7 +436,7 @@ def generate_bash_script(num_processes, runRI, output_filepath):
 
     # <4> Parallel computation commands -> REDCAT 
     script.append("# --- Do REDCat computes ---")
-    script.append(f"REDLoss -f redloss1.cf 2>> work/redcat.log &")
+    script.append(f"REDLoss -f redloss1.cf 2>&1 | tee -a work/redcat.log &")
     for i in range(2, num_processes+1):
         script.append(f"REDLoss -f redloss{i}.cf > /dev/null 2>&1 &")
 
