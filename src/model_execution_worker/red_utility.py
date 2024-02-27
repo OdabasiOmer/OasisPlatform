@@ -276,8 +276,7 @@ def georeference(inputLocationFilePath, outputFilePath, inputDataDir):
                 
             try:
                 data_in["Latitude"][i] = CAPs.LATITUDE[CAP]
-                data_in["Longitude"][i] = CAPs.LATITUDE[CAP]
-                
+                data_in["Longitude"][i] = CAPs.LONGITUDE[CAP]
                 errors.loc[6,"ErrNumber"] += 1
             except:
 
