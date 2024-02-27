@@ -498,6 +498,8 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         shutil.copy(os.path.join(oed_keys_dir,'construction_codes.csv'), './input/')
         shutil.copy(os.path.join(oed_keys_dir,'oed_fields.csv'), './input/')
         shutil.copy(os.path.join(oed_keys_dir,'numfloor_to_rise_dictionary.csv'), './input/')
+        shutil.copy(os.path.join(oed_keys_dir,'code_levels.csv'), './input/')
+        shutil.copy(os.path.join(oed_keys_dir,'code_level_years.csv'), './input/')
 
         # Step-0) <pre-REDCat> Input validation       
         # a) Input validation | Part I. ***************
