@@ -201,7 +201,6 @@ def delete_lines_from_file(file_path, start_line, end_line):
     except Exception as e:
         print(f"An error occurred: {e}")
 
-# WIP #
 def georeference(inputLocationFilePath, outputFilePath, inputDataDir):
     ## IMPORT FILES ##
     # CAPs
@@ -215,14 +214,11 @@ def georeference(inputLocationFilePath, outputFilePath, inputDataDir):
     CAPs = pd.read_csv(folder + files[0], sep="\t", dtype=str)
 
     # nations
-    nations = pd.read_csv(
-        f"{inputDataDir}/nations.txt",
-        index_col=[0],
-    )
+    nations = pd.read_csv(os.path.join(inputDataDir, 'nations.txt'), index_col=[0])
 
     ## ANALYSIS ##
-    log = open(inputLocationFilePath + "-log.txt", "w+")
-    data_in = pd.read_csv(inputLocationFilePath, dtype=str)
+    log = open("log.txt", "w+")
+    data_in = pd.read_csv(inputLocationFilePath, dtype=str, encoding='latin-1')
     data_in.fillna('', inplace=True)
 
     errors = pd.DataFrame(
@@ -241,11 +237,19 @@ def georeference(inputLocationFilePath, outputFilePath, inputDataDir):
         columns=["ErrType"],
     )
     errors["ErrNumber"] = 0
-
+    
+    # read all CAPs:
+    CAPS_all = {}
+    
+    for nation in nations.Country[data_in.CountryCode.unique()]:
+        CAPS_all[nation] = pd.read_csv(folder + nation + version, sep="\t", dtype={'CUL':str,'LATITUDE':float, 'LONGITUDE':float})
+        CAPS_all[nation] = CAPS_all[nation].drop(['NAME'], axis = 1).groupby(['CUL']).mean()
+        CAPS_all[nation]['CUL'] = CAPS_all[nation].index
+    
     if "Longitude" not in data_in.columns and "PostalCode" in data_in.columns:
-        logging.info("---WARNING: Longitude and Latitude columns not provided---" + "\n")
-        logging.info("Coordinates set from Postal Code" + "\n")
-        errors["ErrNumber"].loc[4] += 1
+        print("---WARNING: Longitude and Latitude columns not provided---" + "\n")
+        print("Coordinates set from Postal Code" + "\n")
+        errors.loc[4,"ErrNumber"] += 1
 
         data_in["Latitude"] = 0
         data_in["Longitude"] = 0
@@ -254,11 +258,11 @@ def georeference(inputLocationFilePath, outputFilePath, inputDataDir):
             CAPs = []
             try:
                 nation = nations.Country[data_in.CountryCode[i]]
-                CAPs = pd.read_csv(folder + nation + version, sep="\t", dtype=str)
+                CAPs = CAPS_all[nation]
                 CAPs.index = CAPs.CUL
-                CAP = data_in.PostalCode[i]
+                CAP = str(data_in.PostalCode[i])
             except:
-                logging.error(
+                print(
                     data_in.PortNumber[i]
                     + " "
                     + data_in.LocNumber[i]
@@ -267,22 +271,21 @@ def georeference(inputLocationFilePath, outputFilePath, inputDataDir):
                     + nation
                     + ")\n"
                 )
-                errors["ErrNumber"].loc[2] += 1
+                errors.loc[2,"ErrNumber"] += 1
                 return 1
                 
-            if len(CAPs) > 0:
-                try:
-                    data_in["Latitude"][i] = CAPs.LATITUDE[CAP][0]
-                    data_in["Longitude"][i] = CAPs.LONGITUDE[CAP][0]
-                except:
-                    logging.error(
-                        data_in.PortNumber[i] + ": ZIP not in database (" + CAP + ")\n"
-                    )
-                    errors["ErrNumber"].loc[1] += 1
-                    return 1
+            try:
+                data_in["Latitude"][i] = CAPs.LATITUDE[CAP]
+                data_in["Longitude"][i] = CAPs.LONGITUDE[CAP]
+                
+                errors.loc[6,"ErrNumber"] += 1
+            except:
+
+                errors.loc[1,"ErrNumber"] += 1
+                return 1
 
     elif "Longitude" not in data_in.columns and "PostalCode" not in data_in.columns:
-        logging.error(
+        print(
             "***ERROR***: both coordinates and postal code are missing, impossible to set coordinate***"
             + "\n"
         )
@@ -291,44 +294,38 @@ def georeference(inputLocationFilePath, outputFilePath, inputDataDir):
 
     else:
         for i in data_in.index:
+            if i % 1000 == 0:
+                print("Locations processed: " + str(i))
+                
             if data_in["Latitude"][i] == '' or data_in["Longitude"][i] == '':
                 CAPs = []
                 try:
                     nation = nations.Country[data_in.CountryCode[i]]
-                    CAPs = pd.read_csv(folder + nation + version, sep="\t", dtype=str)
+                    CAPs = CAPS_all[nation]
                     CAPs.index = CAPs.CUL
                     CAP = data_in.PostalCode[i]
                 except:
-                    logging.info(
+                    print(
                         data_in.PortNumber[i]
                         + ": country not in database ("
                         + nation
                         + ")\n"
                     )
-                    errors["ErrNumber"].loc[2] += 1
-                    logging.error('Georeferencer: Country error')
+                    errors.loc[2,"ErrNumber"] += 1
+                    print('Georeferencer: Country error')
                     return 1
 
-                if len(CAPs) > 0:
-                    try:
-                        data_in["Latitude"][i] = str(np.mean(CAPs.LATITUDE[CAP].astype(float).values))
-                        data_in["Longitude"][i] = str(np.mean(CAPs.LONGITUDE[CAP].astype(float).values))
-                        logging.info(
-                            data_in.PortNumber[i]
-                            + ": coordinates not provided, set from Postal Code code\n"
-                        )
-                        errors["ErrNumber"].loc[6] += 1
-                    except:
-                        logging.error(
-                            data_in.PortNumber[i]
-                            + ": ZIP not in database ("
-                            + CAP
-                            + ")\n"
-                        )
-                        errors["ErrNumber"].loc[1] += 1
-                        return 1
+                try:
+                    data_in["Latitude"][i] = CAPs.LATITUDE[CAP]
+                    data_in["Longitude"][i] = CAPs.LONGITUDE[CAP]
+                    
+                    errors.loc[6,"ErrNumber"] += 1
+                except:
+
+                    errors.loc[1,"ErrNumber"] += 1
+                    return 1
             elif data_in.PostalCode[i] == "0":
-                logging.info("WARNING, PostalCode missing\n")
+                print("WARNING, PostalCode missing\n")
                 errors["ErrNumber"].loc[5] += 1  
                 
     errors["ErrNumber"].loc[7] = sum(errors["ErrNumber"].values[4::])
