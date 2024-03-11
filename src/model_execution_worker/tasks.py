@@ -449,14 +449,11 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         #
         ##########################################################################
         # Parse the analysis_settings file and extract key parameters:
-        # <TODO> Debug set manually. Set it to debug_worker later.
-        
-        dbg=False
-        
+       
         analysis_params = parse_analysis_settings_file(analysis_settings_file, debug=False)
         
         nSamples = min(12, analysis_params.getint('default', 'number_of_samples', fallback=3))
-        nThread = 32
+        nThread = 42
         
         oed_keys_dir = "/home/worker/model/model_data/OasisRed/redcat"
         redcat_model_data = "/home/worker/model/model_data/OasisRed/redcat"
@@ -468,21 +465,14 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         # Copy the base (initial/static) part of the custom runner script run-ored-fifo.sh over to run_dir.
         shutil.copy('/home/worker/model/run-ored-fifo-base.sh', os.path.join(run_dir, 'run-ored-fifo-base.sh'))
         logging.info("Copied run-ored-fifo.sh over. The contents of run_dir:")
-        subprocess.call(["ls",run_dir])
 
-        if dbg:
-            logging.info("The contents of run_dir/input instead:")
+        if debug_worker:
+            logging.info("The contents of run_dir/input:")
             subprocess.call(["ls",run_dir + "/input"])
 
         # >>> Change dir to run_dir
         os.chdir(run_dir)
         subprocess.call('touch work/redcat.log', shell=True)
-        
-        if dbg:
-            logging.info("Trying to change dir to run_dir. PWD:")
-            subprocess.call(["pwd"])
-            logging.info("Setting run-ored-fifo.sh privilages and running scriiipt...")
-        
         subprocess.call(["chmod", "+x", "run-ored-fifo-base.sh"])
         
         # Step-0a) Copy over REDCat .cf files
@@ -546,7 +536,7 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
             os.system(command)
 
             # Step-5A) Set upt redloss*.cf and HFL*.fls
-            set_number_of_samples(nSamples=nSamples, debug=dbg)
+            set_number_of_samples(nSamples=nSamples, debug=debug_worker)
             partition_events(num_threads=nThread, base_fls_file='./work/maps_int/Interpolated.fls')
             partition_redloss_config(num_threads=nThread, base_cf_filepath='redloss.cf')
             
@@ -565,13 +555,19 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
             run_ktools_end = generate_bash_script(nThread, runRI, 'run-ored-end.sh')
             run_ktools_complete = append_to_existing_file('run-ored-fifo-base.sh', run_ktools_end, 'run-ored-full.sh')
             
-            if dbg:
-                logging.info("Setting run-ored-full.sh privilages and running script...")
+            if debug_worker:
+                logging.info("Setting Wrun-ored-full.sh privilages and running script...")
             subprocess.call(["chmod", "+x", run_ktools_complete])
-            
-            # Step-5C) Run run-ored-fifo.sh script
-            subprocess.call([f"./{run_ktools_complete}"], cwd=run_dir)
-            if dbg:
+
+            # Step-5C) Run run-ored-fifo.sh script *****************************************
+            bash_trace = subprocess.call(['bash', run_ktools_complete], cwd=run_dir)
+
+            if debug_worker:
+                time.sleep(2)
+
+            # ******************************************************************************
+           
+            if debug_worker:
                 shutil.copy('work/redcat.log', 'output')
                 shutil.copy('input/portfolio.csv', 'output')
                     
