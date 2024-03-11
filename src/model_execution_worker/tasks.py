@@ -451,12 +451,10 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         # Parse the analysis_settings file and extract key parameters:
         # <TODO> Debug set manually. Set it to debug_worker later.
         
-        dbg=True
-        
         analysis_params = parse_analysis_settings_file(analysis_settings_file, debug=False)
         
         nSamples = min(12, analysis_params.getint('default', 'number_of_samples', fallback=3))
-        nThread = 8
+        nThread = 9
         
         oed_keys_dir = "/home/worker/model/model_data/OasisRed/redcat"
         redcat_model_data = "/home/worker/model/model_data/OasisRed/redcat"
@@ -469,17 +467,11 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         shutil.copy('/home/worker/model/run-ored-fifo-base.sh', os.path.join(run_dir, 'run-ored-fifo-base.sh'))
         logging.info("Copied run-ored-fifo.sh over. The contents of run_dir:")
         subprocess.call(["ls",run_dir])
-
-        logging.info("The contents of run_dir/input instead:")
-        subprocess.call(["ls",run_dir + "/input"])
         
-        # WARNING: This is a cause of headaches.. I have to make sure that tasks.py doesnt get stuck inside the run_dir! 
-        #TODO
         os.chdir(run_dir)
         subprocess.call('touch work/redcat.log', shell=True)
         
         logging.info("Trying to change dir to run_dir. PWD:")
-        subprocess.call(["pwd"])
 
         logging.info("Setting run-ored-fifo.sh privilages and running scriiipt...")
         subprocess.call(["chmod", "+x", "run-ored-fifo-base.sh"])
@@ -497,6 +489,8 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         shutil.copy(os.path.join(oed_keys_dir,'construction_codes.csv'), './input/')
         shutil.copy(os.path.join(oed_keys_dir,'oed_fields.csv'), './input/')
         shutil.copy(os.path.join(oed_keys_dir,'numfloor_to_rise_dictionary.csv'), './input/')
+        shutil.copy(os.path.join(oed_keys_dir,'code_levels.csv'), './input/')
+        shutil.copy(os.path.join(oed_keys_dir,'code_level_years.csv'), './input/')
 
         # Step-0) <pre-REDCat> Input validation       
         # a) Input validation | Part I. ***************
@@ -544,7 +538,7 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
             #os.system(f'{redcat_bins_dir}/REDHazOQ -f redhazoq.cf 2>> work/redcat.log')
 
             # Step-5A) Set upt redloss*.cf and HFL*.fls
-            set_number_of_samples(nSamples=nSamples, debug=dbg)
+            set_number_of_samples(nSamples=nSamples, debug=debug_worker)
             partition_events(num_threads=nThread, base_fls_file='./work/maps_int/Interpolated.fls')
             partition_redloss_config(num_threads=nThread, base_cf_filepath='redloss.cf')
             
@@ -568,8 +562,9 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
             
             # Step-5C) Run run-ored-fifo.sh script
             subprocess.call([f"./{run_ktools_complete}"], cwd=run_dir)
-            shutil.copy('work/redcat.log', 'output')
-            shutil.copy('input/portfolio.csv', 'output')
+            if debug_worker:
+                shutil.copy('work/redcat.log', 'output')
+                shutil.copy('input/portfolio.csv', 'output')
                     
             # Check if run-ored finished successfully:
             returncode = check_redcat_completion('./work/lossout')
@@ -581,9 +576,7 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         proc.returncode = returncode
         
         os.chdir("/home/worker")
-        logging.info("Changing back to /home/worker. PWD:")
-        subprocess.call(["pwd"])
-        subprocess.call(["ls"])
+        logging.info("Changing back to /home/worker...")
 
         # ----------------------------------------------------------------------
         # End of REDCat integration
@@ -703,16 +696,14 @@ def generate_input(self,
         # Georeference location.csv ****
         returncode = 0
         shutil.copy(location_file, './location.csv')
+
+        logging.info('Checking for georeferencing...')
         try:
-            logging.info('Checking for georeferencing...')
             returncode = georeference(location_file, 
                                       location_file, 
                                       '/home/worker/model/model_data/OasisRed/redcat/georeferencing/')
-        except:
-            returncode = 1
-            logging.error('Georeferencing attempt failed. Verify your input and resubmit!')
-        if returncode == 0:
-            logging.info('Georeferencing applied.')
+        except Exception as e:
+            logging.error("Error encountered georeferencing. Perhaps it wasnt necessary. Check error log: {}".format(e))
 
         # Log MDK generate command
         args_list = run_args + [''] if (len(run_args) % 2) else run_args
