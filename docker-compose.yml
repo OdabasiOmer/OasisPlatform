@@ -14,7 +14,7 @@ services:
       - rabbit
     environment:
       - OASIS_ADMIN_USER=reduser1000
-      - OASIS_ADMIN_PASS=3845965ruser
+      - OASIS_ADMIN_PASS=3845965
       - OASIS_DEBUG=1
       - OASIS_RABBIT_HOST=rabbit
       - OASIS_RABBIT_PORT=5672
@@ -81,8 +81,8 @@ services:
       - rabbit:myrabbit
     environment:
       - OASIS_MODEL_SUPPLIER_ID=RED
-      - OASIS_MODEL_ID=EUM23
-      - OASIS_MODEL_VERSION_ID=1.6.1
+      - OASIS_MODEL_ID=EUM-EQ
+      - OASIS_MODEL_VERSION_ID=1.6.2
       - OASIS_RABBIT_HOST=rabbit
       - OASIS_RABBIT_PORT=5672
       - OASIS_RABBIT_USER=rabbit
