@@ -516,7 +516,7 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         
         if returncode == 0:
             
-            os.system(f'{redcat_bins_dir}/REDExp -f redexp.cf 2>&1 | tee -a work/redcat.log')
+            os.system(f'{redcat_bins_dir}/REDExp -f redexp.cf >> work/redcat.log 2>&1')
 
             # Step-2) <pre-REDLoss> Run REDField
             setup_redcat_spatialcorr(coord_filepath='work/coordinates.txt',
