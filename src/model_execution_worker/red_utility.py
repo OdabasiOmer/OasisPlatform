@@ -331,6 +331,34 @@ def georeference(inputLocationFilePath, outputFilePath, inputDataDir):
     log.close()
     return 0
 
+def generate_bash_from_existing():
+    """Generates a REDCat-Oasis integrated analysis start bash script, 
+    importing the one generated on the fly by oasislmf model generate-input-models 
+    command and inserting necessary functionality for RED-Oasis inter-opreability.
+    
+    ********************************************
+    Psuedo code for generate-bash() that writes the ored-ktools runner bash (.sh) script
+    ********************************************
+    1) read in the native run_ktools.sh script
+    2) insert front the block that needs to be inserted including RED mod functions
+    3) modify in place bits, inserting REDCat-related calls
+        a) identify line #s where we need to swap out the lines that invoke the first pipe with ours
+        b) remember to insert fifo check
+        c) systematically substitute the lines
+    4) insert/modify summarycalc lines if needed?
+    ********************************************
+
+    Keyword arguments:
+    argument -- description
+    Return: return_description
+    """
+
+    
+
+    return
+
+    
+
 
 def generate_bash_script(num_processes, runRI, output_filepath):
     """
