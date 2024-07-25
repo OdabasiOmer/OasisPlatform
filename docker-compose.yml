@@ -78,7 +78,7 @@ services:
       - rabbit:myrabbit
     environment:
       - OASIS_MODEL_SUPPLIER_ID=RED
-      - OASIS_MODEL_ID=EUM23
+      - OASIS_MODEL_ID=EUM-EQ
       - OASIS_RABBIT_HOST=rabbit
       - OASIS_RABBIT_PORT=5672
       - OASIS_RABBIT_USER=rabbit
