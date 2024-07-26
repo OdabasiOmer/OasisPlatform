@@ -955,7 +955,7 @@ def sort_csv(file_path, col):
     df_sorted = df.sort_values(by=col, kind='mergesort')
     
     # Write the sorted DataFrame back to the CSV file without altering any format
-    df_sorted.to_csv(file_path, index=False, quoting=1)
+    df_sorted.to_csv(file_path, index=False)
 
 def _read_legacy_epc(filepath,isExposureRun=False):
     num_cols = 4
