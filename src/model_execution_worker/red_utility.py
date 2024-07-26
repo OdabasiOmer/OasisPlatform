@@ -954,6 +954,15 @@ def shortlist_ruptures(rupture_zone_idx_file, shortlisted_zones_idx, map_files_d
 
     return msg
 
+def sort_csv(file_path, col):
+    # Read the CSV file without altering any data format
+    df = pd.read_csv(file_path, dtype=str)
+    
+    df_sorted = df.sort_values(by=col, kind='mergesort')
+    
+    # Write the sorted DataFrame back to the CSV file without altering any format
+    df_sorted.to_csv(file_path, index=False)
+
 def _read_legacy_epc(filepath,isExposureRun=False):
     num_cols = 4
     loss_col_idx = 3
