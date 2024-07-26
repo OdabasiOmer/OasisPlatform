@@ -510,6 +510,9 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
             returncode = -2
             logging.error(f"An error occurred running oredexp: {e}")
 
+        # c) Sort portfolio.csv - this is needed to match coverage ids because oasislmf sorts the locations by their id in ascending (string!) order
+        sort_csv('./input/portfolio.csv', 'policy')
+
         # Step-1) <pre-REDCat> Define boundary area for analysis and run REDExp.
         outPath = fetch_coordinates_from_location_file('input/location.csv',
                                                         'work/coordinates.txt')
