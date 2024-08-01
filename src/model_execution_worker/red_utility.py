@@ -398,7 +398,15 @@ def generate_bash(ktools_filepath, ored_base_filepath, num_processes, runRI, out
     block2 = read_block_from_file(ored_base_filepath, 'check_fifo_x()', '# --- Setup run dirs', False)
     
     # Extract block3
-    block3 = extract_block(lines, 'find output -type', '( eve', include_last_line=False)
+    block3a = extract_block(lines, 'find output -type', 'rm -R -f work/*', include_last_line=False)
+
+    block3b = [
+        "rm -Rf work/il*",
+        "rm -Rf work/gul*"
+        "rm -Rf work/kat/"
+    ]
+
+    block3c = extract_block(lines, 'mkdir -p work/kat/', '( eve', include_last_line=False)
 
     # block4: REDCat computes 
     #####################################################################
@@ -431,7 +439,7 @@ def generate_bash(ktools_filepath, ored_base_filepath, num_processes, runRI, out
     ]
 
     # Merge all blocks together
-    full_block4 = block1 + block2 + block3 + block4 + block5 + block6
+    full_block4 = block1 + block2 + block3a + block3b + block3c + block4 + block5 + block6
 
     # Write the merged block4 into a new file
     with open(output_filepath, 'w') as file:
