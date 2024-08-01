@@ -976,6 +976,31 @@ def shortlist_ruptures(rupture_zone_idx_file, shortlisted_zones_idx, map_files_d
 
     return msg
 
+def adapt_ordering(portfolio_file_path):
+    # Load the files
+    portfolio_df = pd.read_csv(portfolio_file_path)
+    summary_map_df = pd.read_csv('./input/fm_summary_map.csv')
+    loc_idx = summary_map_df['loc_idx']
+    loc_id = summary_map_df['loc_id']
+
+    # Remove duplicates
+    loc_idx, loc_id = pd.Series(loc_idx).drop_duplicates(), pd.Series(loc_id).drop_duplicates()
+
+    # Ensure loc_idx and loc_id are the same length after removing duplicates
+    if len(loc_idx) != len(loc_id):
+        raise ValueError("Mismatch in lengths of loc_idx and loc_id after removing duplicates.")
+
+    # Filter the portfolio_df to only include rows with indices in loc_idx
+    filtered_portfolio_df = portfolio_df.iloc[loc_idx].reset_index(drop=True)
+
+    # Create a new DataFrame for the reordered portfolio
+    reordered_portfolio_df = filtered_portfolio_df.copy()
+
+    # Reorder the DataFrame based on loc_id (subtracting 1 to adjust for zero-based index)
+    reordered_portfolio_df.index = loc_id - 1
+    reordered_portfolio_df = reordered_portfolio_df.sort_index().reset_index(drop=True)
+    reordered_portfolio_df.to_csv(portfolio_file_path, index=False) 
+
 def _read_legacy_epc(filepath,isExposureRun=False):
     num_cols = 4
     loss_col_idx = 3

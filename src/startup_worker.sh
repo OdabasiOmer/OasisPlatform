@@ -7,6 +7,19 @@ export PYTHONPATH=$SCRIPT_DIR
 # Set the ini file path 
 export OASIS_INI_PATH="${SCRIPT_DIR}/conf.ini"
 
+# Define the path to the version CSV file
+VERSION_FILE="${OASIS_MODEL_DATA_DIRECTORY}/keys_data/OasisRed/ModelVersion.csv"
+
+# Check if the version file exists and extract the third value
+if [[ -f "$VERSION_FILE" ]]; then
+  OASIS_MODEL_VERSION_ID=$(cut -d',' -f3 "$VERSION_FILE")
+  export OASIS_MODEL_VERSION_ID
+else
+  echo "Version file not found at $VERSION_FILE!"
+  OASIS_MODEL_VERSION_ID="X.Y.Z"
+  export OASIS_MODEL_VERSION_ID
+fi
+
 # Delete celeryd.pid file - fix que pickup issues on reboot of server
 rm -f /home/worker/celeryd.pid
 

@@ -453,7 +453,7 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         
         analysis_params = parse_analysis_settings_file(analysis_settings_file, debug=False)
         
-        nSamples = min(12, analysis_params.getint('default', 'number_of_samples', fallback=3))
+        nSamples = min(18, analysis_params.getint('default', 'number_of_samples', fallback=3))
         nThread = 9
         
         oed_keys_dir = "/home/worker/model/model_data/OasisRed/redcat"
@@ -491,8 +491,9 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         shutil.copy(os.path.join(oed_keys_dir,'numfloor_to_rise_dictionary.csv'), './input/')
         shutil.copy(os.path.join(oed_keys_dir,'code_levels.csv'), './input/')
         shutil.copy(os.path.join(oed_keys_dir,'code_level_years.csv'), './input/')
+        shutil.copy(os.path.join(oed_keys_dir,'crit_ind_fac_mapping.csv'), './input/')
 
-        # Step-0) <pre-REDCat> Input validation       
+        # Step-0) <pre-REDCat> Input validation
         # a) Input validation | Part I. ***************
         returncode = checkForInvalidConstructionCode('./input/location.csv', 
                                                     'ConstructionCode', 
@@ -508,6 +509,11 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         except Exception as e:
             returncode = -2
             logging.error(f"An error occurred running oredexp: {e}")
+
+        # c) Sort portfolio.csv - this is needed to match coverage ids because oasislmf sorts the locations by their id in ascending (string!) order
+        if debug_worker:
+            logging.info("Re-ordering REDCat policy file")
+        adapt_ordering('./input/portfolio.csv')
 
         # Step-1) <pre-REDCat> Define boundary area for analysis and run REDExp.
         outPath = fetch_coordinates_from_location_file('input/location.csv',
@@ -562,14 +568,17 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
             
             # Step-5C) Run run-ored-fifo.sh script
             subprocess.call([f"./{run_ktools_complete}"], cwd=run_dir)
+            
             if debug_worker:
                 shutil.copy('work/redcat.log', 'output')
                 shutil.copy('input/portfolio.csv', 'output')
                     
             # Check if run-ored finished successfully:
             returncode = check_redcat_completion('./work/lossout')
+            
             if not returncode == 0:
                 logging.error("REDCat did not run successfully, check the error log!") 
+
             
         # -------------------------------------------------------------------
         
