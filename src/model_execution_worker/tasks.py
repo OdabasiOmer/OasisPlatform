@@ -398,7 +398,7 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
             '--config', config_path,
             '--model-run-dir', run_dir,
             '--analysis-settings-json', analysis_settings_file,
-            '--ktools-num-processes', nThread,
+            '--ktools-num-processes', str(nThread),
             '--ktools-fifo-relative',
             '--verbose'
         ]
