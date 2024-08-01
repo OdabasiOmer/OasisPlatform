@@ -331,34 +331,114 @@ def georeference(inputLocationFilePath, outputFilePath, inputDataDir):
     log.close()
     return 0
 
-def generate_bash_from_existing():
-    """Generates a REDCat-Oasis integrated analysis start bash script, 
+def generate_bash(ktools_filepath, ored_base_filepath, num_processes, runRI, output_filepath):
+    """Generates a REDCat-Oasis integrated analysis start bash block4, 
     importing the one generated on the fly by oasislmf model generate-input-models 
     command and inserting necessary functionality for RED-Oasis inter-opreability.
     
     ********************************************
-    Psuedo code for generate-bash() that writes the ored-ktools runner bash (.sh) script
+    Psuedo code for generate-bash() that writes the ored-ktools runner bash (run-ored-full.sh) block4. 
+    It first devises blocks, excerpting from the main run_ktool.sh file, and manually creating others, then merges
+    all into a new file.
     ********************************************
-    1) read in the native run_ktools.sh script
-    2) insert front the block that needs to be inserted including RED mod functions
-    3) modify in place bits, inserting REDCat-related calls
-        a) identify line #s where we need to swap out the lines that invoke the first pipe with ours
-        b) remember to insert fifo check
-        c) systematically substitute the lines
-    4) insert/modify summarycalc lines if needed?
+    1) read in the native run_ktools.sh block4
+
+    2a) Extract and store block1 from the front of the file. 
+    This will be done by a specialied function that takes in as input keywords (string) to find the beginning and the end lines.
+    Here they should be '#!/bin/bash' and 'Setup run dirs'. Add a flag for including/excluding the last line marked by the second keyword.
+
+    2b) block2 is a REDCat custom bash function block.
+
+    2c) block3 is extracted from run_ktools.sh between lines containing strings 'find output -type' and '( eve' (excluding final line)
+    
+    2d) block4 is devised by a code block of mine (leave emmpty space for me to insert it here)
+
+    2e) block5 is extracted from run_ktools.sh between lines containing strings 'wait $pid' and 'rm -R -f work' (excluding)
+    
+    2f) block 6 is manually defined as:
+    check_complete
+    rm -R -f work/*
+    rm -R -f fifo/*
+
+    3) Merge all blocks together an write into a file called run-ored-full.sh
+    
     ********************************************
 
     Keyword arguments:
-    argument -- description
-    Return: return_description
+    argument -- deblock4ion
+    Return: return_deblock4ion
     """
+    def extract_block(lines, start_keyword, end_keyword, include_last_line=False):
+        block = []
+        in_block = False
+        for line in lines:
+            if start_keyword in line:
+                in_block = True
+            if in_block:
+                block.append(line)
+            if in_block and end_keyword in line:
+                if not include_last_line:
+                    block.pop()  # Remove the last line if not included
+                break
+        return block
 
+    def read_block_from_file(file_path, start_keyword, end_keyword, include_last_line=False):
+        with open(file_path, 'r') as file:
+            lines = file.readlines()
+        return extract_block(lines, start_keyword, end_keyword, include_last_line)
+
+    # Read the entire run_ktools.sh file
+    with open(ktools_filepath, 'r') as file:
+        lines = file.readlines()
+
+    # Extracting blocks based on specified criteria
+    block1 = extract_block(lines, '#!/bin/bash', 'Setup run dirs', include_last_line=True)
     
+    # block2: REDCat custom bash function block - check_fifo_x() functions.
+    block2 = read_block_from_file(ored_base_filepath, 'check_fifo_x()', '# --- Setup run dirs', False)
+    
+    # Extract block3
+    block3 = extract_block(lines, 'find output -type', '( eve', include_last_line=False)
+
+    # block4: REDCat computes 
+    #####################################################################
+    # TODO: REINSURANCE COMPUTE IS HARDCODED HERE TO BE REVISITED LATER.
+    #####################################################################
+    block4 = []
+    block4.append("# --- Do REDCat computes ---")
+    block4.append(f"REDLoss -f redloss1.cf 2>&1 | tee -a work/redcat.log &")
+    for i in range(2, num_processes+1):
+        block4.append(f"REDLoss -f redloss{i}.cf > /dev/null 2>&1 &")
+    block4.append(f'check_fifo_x "{num_processes}"')
+    block4.append(f" ")
+
+    for i in range(1, num_processes+1):
+        if not runRI:
+            block4.append(f"( tee < fifo/fifo_p{i} fifo/gul_P{i} | fmcalc -a2 > fifo/il_P{i} ) 2>> $LOG_DIR/stderror.err &")
+        else:
+            block4.append(f"( tee < fifo/fifo_p{i} fifo/gul_P{i} | fmcalc -a2 | tee fifo/il_P{i} | fmcalc -a3 -n -p RI_1 > fifo/ri_P{i} ) 2>> $LOG_DIR/stderror.err &")
+
+    # Extract block5
+    block5 = extract_block(lines, 'wait $pid', 'rm -R -f work', include_last_line=False)
+    
+    # block6: Manually defined block
+    block6 = [
+        "check_complete",
+        "rm -Rf work/il_S1*",
+        "rm -Rf work/gul_S1*",
+        "rm -Rf work/kat",
+        "rm -Rf fifo/*"
+    ]
+
+    # Merge all blocks together
+    full_block4 = block1 + block2 + block3 + block4 + block5 + block6
+
+    # Write the merged block4 into a new file
+    with open(output_filepath, 'w') as file:
+        file.write('\n'.join(full_block4))
+        file.write('\n')
 
     return
-
-    
-
 
 def generate_bash_script(num_processes, runRI, output_filepath):
     """

@@ -361,6 +361,7 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
     tmpdir_persist = settings.getboolean('worker', 'KEEP_RUN_DIR', fallback=False)
     tmpdir_base = settings.get('worker', 'BASE_RUN_DIR', fallback=None)
 
+    nThread = 9
 
     # Setup Job cancellation handler
     def analysis_cancel_handler(signum, frame):
@@ -397,6 +398,7 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
             '--config', config_path,
             '--model-run-dir', run_dir,
             '--analysis-settings-json', analysis_settings_file,
+            '--ktools-num-processes', nThread,
             '--ktools-fifo-relative',
             '--verbose'
         ]
@@ -454,7 +456,6 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
         analysis_params = parse_analysis_settings_file(analysis_settings_file, debug=False)
         
         nSamples = min(18, analysis_params.getint('default', 'number_of_samples', fallback=3))
-        nThread = 9
         
         oed_keys_dir = "/home/worker/model/model_data/OasisRed/redcat"
         redcat_model_data = "/home/worker/model/model_data/OasisRed/redcat"
@@ -560,8 +561,8 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
                     logging.info("Reinsurance compute requested, configuring accordingly...")
                     runRI=True
 
-            run_ktools_end = generate_bash_script(nThread, runRI, 'run-ored-end.sh')
-            run_ktools_complete = append_to_existing_file('run-ored-fifo-base.sh', run_ktools_end, 'run-ored-full.sh')
+            run_ktools_complete = 'run-ored-full.sh'
+            generate_bash('run_ktools.sh', 'run-ored-fifo-base.sh', nThread, runRI, run_ktools_complete)
             
             logging.info("Setting run-ored-full.sh privilages and running script...")
             subprocess.call(["chmod", "+x", run_ktools_complete])
