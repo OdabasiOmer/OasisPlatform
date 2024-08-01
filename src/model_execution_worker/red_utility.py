@@ -391,19 +391,18 @@ def generate_bash(ktools_filepath, ored_base_filepath, num_processes, runRI, out
     with open(ktools_filepath, 'r') as file:
         lines = file.readlines()
 
-    # Extracting blocks based on specified criteria
-    block1 = extract_block(lines, '#!/bin/bash', 'Setup run dirs', include_last_line=True)
+    block1 = extract_block(lines, '#!/bin/bash', 'find output -type', include_last_line=False)
     
     # block2: REDCat custom bash function block - check_fifo_x() functions.
     block2 = read_block_from_file(ored_base_filepath, 'check_fifo_x()', '# --- Setup run dirs', False)
     
-    # Extract block3
     block3a = extract_block(lines, 'find output -type', 'rm -R -f work/*', include_last_line=False)
 
     block3b = [
         "rm -Rf work/il*",
-        "rm -Rf work/gul*"
-        "rm -Rf work/kat/"
+        "rm -Rf work/gul*",
+        "rm -Rf work/kat/",
+        " "
     ]
 
     block3c = extract_block(lines, 'mkdir -p work/kat/', '( eve', include_last_line=False)
