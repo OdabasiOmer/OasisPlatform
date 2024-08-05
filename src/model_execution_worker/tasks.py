@@ -542,7 +542,6 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
             # Step-4) REDHazOQ
             command = f'{redcat_bins_dir}/REDHazOQ -f redhazoq.cf 2>&1 | tee -a work/redcat.log'
             os.system(command)
-            #os.system(f'{redcat_bins_dir}/REDHazOQ -f redhazoq.cf 2>> work/redcat.log')
 
             # Step-5A) Set upt redloss*.cf and HFL*.fls
             set_number_of_samples(nSamples=nSamples, debug=debug_worker)
