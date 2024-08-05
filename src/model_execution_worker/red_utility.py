@@ -699,7 +699,7 @@ def get_boundary_box(file_path):
         lat_min = lat_min - 0.15
         lat_max = lat_max + 0.15
         lon_min = lon_min - 0.15
-        lon_max = lon_max - 0.15
+        lon_max = lon_max + 0.15
 
     return {
         'latitude_min': lat_min,
