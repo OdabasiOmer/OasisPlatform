@@ -543,16 +543,16 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
             os.system(command)
 
             # Step-5A) Set upt redloss*.cf and HFL*.fls
-            set_number_of_samples(nSamples=nSamples, debug=debug_worker)
-            partition_events(num_threads=nThread, base_fls_file='./work/maps_int/Interpolated.fls')
-            partition_redloss_config(num_threads=nThread, base_cf_filepath='redloss.cf')
-            
-            logging.info("Partitioned events for multi-threaded analysis.")
-            
             logging.info("Coppying over the occurrence file...")
             shutil.copy(os.path.join(redcat_model_data,'occurrence.csv'),
                         os.path.join(run_dir, 'input'))
             
+            set_number_of_samples(nSamples=nSamples, debug=debug_worker)
+            partition_events_chrono(num_threads=nThread, base_fls_file='./work/maps_int/Interpolated.fls')
+            partition_redloss_config(num_threads=nThread, base_cf_filepath='redloss.cf')
+            
+            logging.info("Partitioned events for multi-threaded analysis.")
+               
             # Step-5B) Set up run-ored-fifo.sh script
             if analysis_params.has_option('default', 'ri_output'):
                 if analysis_params.getboolean('default', 'ri_output', fallback=False):

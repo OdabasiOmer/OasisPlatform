@@ -8,6 +8,8 @@ import configparser
 import numpy as np
 import shutil
 import pandas as pd
+import time
+import re
 from scipy.interpolate import interp1d
 
 FIG_PARAMS      = {"f_size": (9.5, 6),
@@ -804,6 +806,83 @@ def partition_events(num_threads, base_fls_file):
             if not i==0:
                 chunk_file.writelines(['./work/portfolio.grd\n'])
             chunk_file.writelines(chunk)
+
+def partition_events_chrono(num_threads, base_fls_file, path_to_occ_file='./input/occurrence.csv'):
+    """
+    Sort events by date and distribute them into multiple .fls files, 
+    with each chunk starting at a new year, and evenly split among n files.
+    
+    Args:
+        path_to_occ_file: Path to the occurrence.csv file
+        base_fls_file: Path to the interpolated.fls file
+        num_threads: Number of output .fls files (number of threads)
+    """
+    
+    # Read occurrence.csv and extract the event_ids in chronological order
+    event_data = {}  # Dictionary to store event_id and corresponding date information (year, month, day)
+    with open(path_to_occ_file, mode='r') as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            event_id = row['event_id']
+            year = int(row['occ_year'])
+            month = int(row['occ_month'])
+            day = int(row['occ_day'])
+            event_data[event_id] = (year, month, day)
+
+    # Regular expression to match filenames like Rup_<event_id>_int.map
+    event_id_pattern = re.compile(r'Rup_(\d+)_int\.map')
+
+    # Read interpolated.fls file and extract event_ids from the file paths
+    fls_lines = []
+    with open(base_fls_file, mode='r') as flsfile:
+        first_line = flsfile.readline().strip()  # Read the first line separately
+        for line in flsfile:
+            # Match the event_id using the regular expression
+            match = event_id_pattern.search(line)
+            if match:
+                event_id = match.group(1)  # Extract the event_id (digits part)
+                if event_id in event_data:
+                    # Store event_id and the full line, and date info for sorting
+                    fls_lines.append((event_data[event_id], line.strip()))  # Append ((year, month, day), line)
+
+    # Sort the fls_lines based on the (year, month, day)
+    sorted_fls_lines = sorted(fls_lines, key=lambda x: x[0])
+
+    # Divide sorted lines into chunks, each starting with a new year
+    year_chunks = []
+    current_chunk = []
+    current_year = sorted_fls_lines[0][0][0]  # Start with the year of the first event
+
+    for event in sorted_fls_lines:
+        year = event[0][0]  # Extract year
+        if year != current_year:
+            # If we encounter a new year, save the current chunk and start a new one
+            year_chunks.append(current_chunk)
+            current_chunk = []
+            current_year = year
+        current_chunk.append(event)
+    if current_chunk:
+        year_chunks.append(current_chunk)  # Append the last chunk
+
+    # Distribute year chunks across n output files
+    num_chunks = len(year_chunks)
+    chunk_size = max(num_chunks // num_threads, 1)  # Ensure at least 1 chunk per file
+    
+    # Write to n output files
+    for i in range(num_threads):
+        with open(f'./HFL{i+1}.fls', mode='w') as out_file:
+            out_file.write(f"{first_line}\n")  # Write the first line from the original fls file
+
+            # Determine which chunks to write into this file
+            start_idx = i * chunk_size
+            end_idx = (i + 1) * chunk_size if i < num_threads - 1 else num_chunks  # Last file may take remaining chunks
+
+            for chunk_idx in range(start_idx, end_idx):
+                for _, line in year_chunks[chunk_idx]:
+                    out_file.write(f"{line}\n")
+                    
+    print(f"Sorted events have been written into {num_threads} .fls files in current directory")
+
 
 def set_number_of_samples(nSamples, debug=False):
     """
