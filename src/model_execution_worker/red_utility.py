@@ -688,12 +688,11 @@ def get_boundary_box(file_path):
     lon_min = data['longitude'].min()
     lon_max = data['longitude'].max()
 
-    # Enlarge grid in case its too small (otherwise it causes issues creating random fields).
-    if abs(lat_min - lat_max) <= 0.1 or abs(lon_min - lon_max) <= 0.1:
-        lat_min = lat_min - 0.15
-        lat_max = lat_max + 0.15
-        lon_min = lon_min - 0.15
-        lon_max = lon_max + 0.15
+    # Enlarge grid.
+    lat_min = lat_min - 0.055
+    lat_max = lat_max + 0.055
+    lon_min = lon_min - 0.055
+    lon_max = lon_max + 0.055
 
     return {
         'latitude_min': lat_min,
