@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Important: Set this variable accordingly: set it to the model directory; it overwrites Dockerfile env variable.
-export OASIS_MODEL_DATA_DIR=/data/OasisRed/
+# export OASIS_MODEL_DATA_DIR=/data/OasisRed/
 
 # Note: no need to redo api_server since we dont touch it
 #docker rmi coreoasis/api_server:latest
