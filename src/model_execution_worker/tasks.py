@@ -361,8 +361,6 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
     tmpdir_persist = settings.getboolean('worker', 'KEEP_RUN_DIR', fallback=False)
     tmpdir_base = settings.get('worker', 'BASE_RUN_DIR', fallback=None)
 
-    nThread = get_json_param(config_path, "ktools_num_processes")
-
     # Setup Job cancellation handler
     def analysis_cancel_handler(signum, frame):
         logging.info('TASK CANCELLATION')
@@ -374,6 +372,7 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
     signals['SIGTERM'] = analysis_cancel_handler
 
     config_path = get_oasislmf_config_path()
+    nThread = get_json_param(config_path, "ktools_num_processes")
     tmp_dir = TemporaryDir(persist=tmpdir_persist, basedir=tmpdir_base)
     filestore.media_root = settings.get('worker', 'MEDIA_ROOT')
 
