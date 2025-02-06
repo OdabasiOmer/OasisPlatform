@@ -389,6 +389,40 @@ def generate_bash(ktools_filepath, ored_base_filepath, num_processes, runRI, out
             lines = file.readlines()
         return extract_block(lines, start_keyword, end_keyword, include_last_line)
 
+    def modify_lines(lines):
+        # Processes a list of text lines, finds lines containing "( eve", and for each such line,
+        # replaces everything from the beginning of the line up to the first occurrence of "| fm"
+        # with a new string. The new string is formatted as:
+        # 
+        #     "( tee < fifo/fifo_p{i} fifo/gul_P{i}"
+        # 
+        # where {i} is extracted from the original line using the pattern "fifo/gul_P<number>".
+        # 
+        # Args:
+        #     lines (list of str): List of text lines to be processed.
+        #     
+        # Returns:
+        #     list of str: The list of processed lines.
+        # 
+        modified_lines = []
+        ii=1
+        for line in lines:
+            if "( eve" in line:               
+                pos = line.find("| fm")
+                if pos != -1:
+                    # Replace everything before "| fm" with the new string.
+                    new_line = f"( tee < fifo/fifo_p{ii} fifo/gul_P{ii}" + line[pos:]
+                    modified_lines.append(new_line)
+                    ii == ii+1
+                else:
+                    # If the expected substring is not found, leave the line unchanged.
+                    modified_lines.append(line)
+            else:
+                modified_lines.append(line)
+                logging.error("Something went wrong when generating the bash script. You might obtain zero-loss results!")
+        
+        return modified_lines
+
     # Read the entire run_ktools.sh file
     with open(ktools_filepath, 'r') as file:
         lines = file.readlines()
@@ -410,9 +444,6 @@ def generate_bash(ktools_filepath, ored_base_filepath, num_processes, runRI, out
     block3c = extract_block(lines, 'mkdir -p work/kat/', '( eve', include_last_line=False)
 
     # block4: REDCat computes 
-    #####################################################################
-    # TODO: REINSURANCE COMPUTE IS HARDCODED HERE TO BE REVISITED LATER.
-    #####################################################################
     block4 = []
     block4.append("# --- Do REDCat computes ---")
     block4.append(f"REDLoss -f redloss1.cf 2>&1 | tee -a work/redcat.log &")
@@ -421,11 +452,8 @@ def generate_bash(ktools_filepath, ored_base_filepath, num_processes, runRI, out
     block4.append(f'check_fifo_x "{num_processes}"')
     block4.append(f" ")
 
-    for i in range(1, num_processes+1):
-        if not runRI:
-            block4.append(f"( tee < fifo/fifo_p{i} fifo/gul_P{i} | fmcalc -a2 > fifo/il_P{i} ) 2>> $LOG_DIR/stderror.err &")
-        else:
-            block4.append(f"( tee < fifo/fifo_p{i} fifo/gul_P{i} | fmcalc -a2 | tee fifo/il_P{i} | fmcalc -a3 -n -p RI_1 > fifo/ri_P{i} ) 2>> $LOG_DIR/stderror.err &")
+    block4b_toMod = extract_block(lines, '( eve', 'wait $p', include_last_line=False)
+    block4b = modify_lines(block4b_toMod)
 
     # Extract block5
     block5 = extract_block(lines, 'wait $pid', 'rm -R -f work', include_last_line=False)
@@ -440,215 +468,13 @@ def generate_bash(ktools_filepath, ored_base_filepath, num_processes, runRI, out
     ]
 
     # Merge all blocks together
-    full_block4 = block1 + block2 + block3a + block3b + block3c + block4 + block5 + block6
+    full_block4 = block1 + block2 + block3a + block3b + block3c + block4 + block4b + block5 + block6
 
     # Write the merged block4 into a new file
     with open(output_filepath, 'w') as file:
         file.write('\n'.join(full_block4))
-        file.write('\n')
 
     return
-
-def generate_bash_script(num_processes, runRI, output_filepath):
-    """
-    Generates a Bash script based on the number of processes and the runRI flag.
-    """
-    script = []
-
-    script.append("rm -R -f work/kat/")
-    script.append("mkdir -p work/kat/")
-    script.append("")
-    script.append("# Generate the occurrence file...")
-    script.append("occurrencetobin -D -P 30000 < ./input/occurrence.csv > ./input/occurrence.bin")
-
-    # Initial setup: Directory and FIFO creation
-    script.append("mkdir -p fifo/")
-    script.append("mkdir -p work/gul_S1_summaryleccalc")
-    script.append("mkdir -p work/gul_S1_summaryaalcalc")
-    script.append("mkdir -p work/il_S1_summaryleccalc")
-    script.append("mkdir -p work/il_S1_summaryaalcalc")
-    if runRI:
-        script.append("mkdir -p work/ri_S1_summaryleccalc")
-        script.append("mkdir -p work/ri_S1_summaryaalcalc")
-
-    script.append(f"# # #")
-
-    # Creating FIFOs for each process
-    for i in range(1, num_processes+1):
-        script.append(f"# Process ---")
-        script.append(f"mkfifo fifo/gul_P{i}")
-        script.append(f"mkfifo fifo/gul_S1_summary_P{i}")
-        script.append(f"mkfifo fifo/gul_S1_summary_P{i}.idx")
-        script.append(f"mkfifo fifo/gul_S1_eltcalc_P{i}")
-        script.append(f"# # #")
-        script.append(f"mkfifo fifo/il_P{i}")
-        script.append(f"mkfifo fifo/il_S1_summary_P{i}")
-        script.append(f"mkfifo fifo/il_S1_summary_P{i}.idx")
-        script.append(f"mkfifo fifo/il_S1_eltcalc_P{i}")
-        script.append(f"# # #")
-        if runRI:
-            script.append(f"mkfifo fifo/ri_P{i}")
-            script.append(f"mkfifo fifo/ri_S1_summary_P{i}")
-            script.append(f"mkfifo fifo/ri_S1_summary_P{i}.idx")
-            script.append(f"mkfifo fifo/ri_S1_eltcalc_P{i}")
-            script.append(f"# # #")
-
-    pid=0
-    # <1> Parallel computation commands -> Do reinsurance loss computes
-    if runRI:
-        script.append("# --- Do reinsurance loss computes ---")
-        pid=pid+1
-        script.append(f"( eltcalc < fifo/ri_S1_eltcalc_P1 > work/kat/ri_S1_eltcalc_P1 ) 2>> $LOG_DIR/stderror.err & pid{pid}=$!")
-        for i in range(2, num_processes+1): # one less because the above line is the first
-            pid=pid+1
-            script.append(f"( eltcalc -s < fifo/ri_S1_eltcalc_P{i} > work/kat/ri_S1_eltcalc_P{i} ) 2>> $LOG_DIR/stderror.err & pid{pid}=$!")
-        for i in range(1, num_processes+1):
-            pid=pid+1
-            script.append(f"tee < fifo/ri_S1_summary_P{i} fifo/ri_S1_eltcalc_P{i} work/ri_S1_summaryaalcalc/P{i}.bin work/ri_S1_summaryleccalc/P{i}.bin > /dev/null & pid{pid}=$!")
-            pid=pid+1
-            script.append(f"tee < fifo/ri_S1_summary_P{i}.idx work/ri_S1_summaryaalcalc/P{i}.idx work/ri_S1_summaryleccalc/P{i}.idx > /dev/null & pid{pid}=$!")
-        for i in range(1, num_processes+1):
-            script.append(f"( summarycalc -m -f -p RI_1 -1 fifo/ri_S1_summary_P{i} < fifo/ri_P{i} ) 2>> $LOG_DIR/stderror.err  &")
-
-    script.append(" ")
-
-    # <2> Parallel computation commands -> Do insured loss computes
-    script.append("# --- Do insured loss computes ---")
-    pid=pid+1
-    script.append(f"( eltcalc < fifo/il_S1_eltcalc_P1 > work/kat/il_S1_eltcalc_P1 ) 2>> $LOG_DIR/stderror.err & pid{pid}=$!")
-    for i in range(2, num_processes+1): # one less because the above line is the first
-        pid=pid+1
-        script.append(f"( eltcalc -s < fifo/il_S1_eltcalc_P{i} > work/kat/il_S1_eltcalc_P{i} ) 2>> $LOG_DIR/stderror.err & pid{pid}=$!")
-    for i in range(1, num_processes+1):
-        pid=pid+1
-        script.append(f"tee < fifo/il_S1_summary_P{i} fifo/il_S1_eltcalc_P{i} work/il_S1_summaryaalcalc/P{i}.bin work/il_S1_summaryleccalc/P{i}.bin > /dev/null & pid{pid}=$!")
-        pid=pid+1
-        script.append(f"tee < fifo/il_S1_summary_P{i}.idx work/il_S1_summaryaalcalc/P{i}.idx work/il_S1_summaryleccalc/P{i}.idx > /dev/null & pid{pid}=$!")
-    for i in range(1, num_processes+1):
-        script.append(f"( summarycalc -m -f  -1 fifo/il_S1_summary_P{i} < fifo/il_P{i} ) 2>> $LOG_DIR/stderror.err  &")
-
-    script.append(" ")
-
-    # <3> Parallel computation commands -> Do GUP computes 
-    script.append("# --- Do ground up loss computes ---")
-    pid=pid+1
-    script.append(f"( eltcalc < fifo/gul_S1_eltcalc_P1 > work/kat/gul_S1_eltcalc_P1 ) 2>> $LOG_DIR/stderror.err & pid{pid}=$!")
-    for i in range(2, num_processes+1): # one less because the above line is the first
-        pid=pid+1
-        script.append(f"( eltcalc -s < fifo/gul_S1_eltcalc_P{i} > work/kat/gul_S1_eltcalc_P{i} ) 2>> $LOG_DIR/stderror.err & pid{pid}=$!")
-    for i in range(1, num_processes+1):
-        pid=pid+1
-        script.append(f"tee < fifo/gul_S1_summary_P{i} fifo/gul_S1_eltcalc_P{i} work/gul_S1_summaryaalcalc/P{i}.bin work/gul_S1_summaryleccalc/P{i}.bin > /dev/null & pid{pid}=$!")
-        pid=pid+1
-        script.append(f"tee < fifo/gul_S1_summary_P{i}.idx work/gul_S1_summaryaalcalc/P{i}.idx work/gul_S1_summaryleccalc/P{i}.idx > /dev/null & pid{pid}=$!")
-    for i in range(1, num_processes+1):
-        script.append(f"( summarycalc -m -i  -1 fifo/gul_S1_summary_P{i} < fifo/gul_P{i} ) 2>> $LOG_DIR/stderror.err  &")
-
-    # <4> Parallel computation commands -> REDCAT #######################################
-    script.append("# --- Do REDCat computes ---")
-    script.append(f"REDLoss -f redloss1.cf 2>&1 | tee -a work/redcat.log &")
-    for i in range(2, num_processes+1):
-        script.append(f"REDLoss -f redloss{i}.cf > /dev/null 2>&1 &")
-    script.append(f'check_fifo_x "{num_processes}"')
-    script.append(f" ")
-
-    # <5> Connect all pipes and start analysis
-    for i in range(1, num_processes+1):
-        if not runRI:
-            script.append(f"( tee < fifo/fifo_p{i} fifo/gul_P{i} | fmcalc -a2 > fifo/il_P{i} ) 2>> $LOG_DIR/stderror.err &")
-        else:
-            script.append(f"( tee < fifo/fifo_p{i} fifo/gul_P{i} | fmcalc -a2 | tee fifo/il_P{i} | fmcalc -a3 -n -p RI_1 > fifo/ri_P{i} ) 2>> $LOG_DIR/stderror.err &")
-
-    waitString = "wait"
-    
-    for p in range(1, pid+1):
-        waitString = waitString + f" $pid{p}"
-    
-    script.append(waitString)
-    
-    # <6> kats *************************************************************************************
-    kpid = 0
-    
-    # <6a> Reinsurance kats <optional>
-    katString = "kat"
-    if runRI:
-        script.append("# --- Do reinsurance kats ---")
-        kpid = kpid + 1
-        for i in range(1, num_processes+1):
-            katString = katString + f" work/kat/ri_S1_eltcalc_P{i}" 
-        katString = katString + f" > output/ri_S1_eltcalc.csv & kpid{kpid}=$!"
-        script.append(katString)
-        script.append(" ")
-    
-
-    # <6b> Insured kats *********
-    script.append("# --- Do insurance kats ---")
-    katString = "kat"
-    kpid = kpid + 1
-    for i in range(1, num_processes+1):
-        katString = katString + f" work/kat/il_S1_eltcalc_P{i}" 
-    katString = katString + f" > output/il_S1_eltcalc.csv & kpid{kpid}=$!"
-    script.append(katString)
-    script.append(" ")
-
-    # <6c> GUP kats *********
-    script.append("# --- Do ground up kats ---")
-    katString = "kat"
-    kpid = kpid + 1
-    for i in range(1, num_processes+1):
-        katString = katString + f" work/kat/gul_S1_eltcalc_P{i}" 
-    katString = katString + f" > output/gul_S1_eltcalc.csv & kpid{kpid}=$!"
-    script.append(katString)
-    script.append(" ")
-
-    waitString = "wait"
-    for p in range(1, kpid+1):
-        waitString = waitString + f" $kpid{p}"
-    script.append(waitString)
-    script.append(" ")
-
-    # <7> Final -> aalcalc and leccalc **************************************************************************
-    lpid = 0
-    if runRI:
-        lpid = lpid + 1
-        script.append(f"( aalcalc -Kri_S1_summaryaalcalc > output/ri_S1_aalcalc.csv ) 2>> $LOG_DIR/stderror.err & lpid{lpid}=$!")
-        lpid = lpid + 1
-        script.append(f"( leccalc -r -Kri_S1_summaryleccalc -F output/ri_S1_leccalc_full_uncertainty_aep.csv -f output/ri_S1_leccalc_full_uncertainty_oep.csv ) 2>> $LOG_DIR/stderror.err & lpid{lpid}=$!")
-    
-    # insured
-    lpid = lpid + 1
-    script.append(f"( aalcalc -Kil_S1_summaryaalcalc > output/il_S1_aalcalc.csv ) 2>> $LOG_DIR/stderror.err & lpid{lpid}=$!")
-    lpid = lpid + 1
-    script.append(f"( leccalc -r -Kil_S1_summaryleccalc -F output/il_S1_leccalc_full_uncertainty_aep.csv -f output/il_S1_leccalc_full_uncertainty_oep.csv ) 2>> $LOG_DIR/stderror.err & lpid{lpid}=$!")
-
-    # ground up
-    lpid = lpid + 1
-    script.append(f"( aalcalc -Kgul_S1_summaryaalcalc > output/gul_S1_aalcalc.csv ) 2>> $LOG_DIR/stderror.err & lpid{lpid}=$!")
-    lpid = lpid + 1
-    script.append(f"( leccalc -r -Kgul_S1_summaryleccalc -F output/gul_S1_leccalc_full_uncertainty_aep.csv -f output/gul_S1_leccalc_full_uncertainty_oep.csv ) 2>> $LOG_DIR/stderror.err & lpid{lpid}=$!")
-        
-    waitString = "wait"
-    for p in range(1, lpid+1):
-        waitString = waitString + f" $lpid{p}"
-    script.append(waitString)
-    script.append("")
-    
-    # <7> Clean up **************************************************************************
-    script.append("check_complete")
-    script.append("")
-
-    script.append("rm -Rf work/il_S1*")
-    script.append("rm -Rf work/gul_S1*")
-    script.append("rm -Rf work/kat")
-    script.append("rm -Rf fifo*")
-    script.append("")
-       
-    script_to_write = '\n'.join(script)
-
-    with open(output_filepath, "w") as file:
-        file.write(script_to_write)
-
-    return script_to_write
 
 def generate_uniform_grid(input_coord_file_path, grid_spacing, output_filepath):
     
@@ -700,6 +526,11 @@ def get_boundary_box(file_path):
         'longitude_min': lon_min,
         'longitude_max': lon_max
     }
+
+def get_json_param(file_path, param):
+    with open(file_path, "r") as f:
+        data = json.load(f)
+    return data.get(param)
 
 def get_damage_function_file_string(country_code, coverage, LoB):
     return 'df_' + country_code + '_Cov' + coverage + '_' + LoB + '.dfs'

@@ -361,7 +361,7 @@ def start_analysis(analysis_settings, input_location, complex_data_files=None):
     tmpdir_persist = settings.getboolean('worker', 'KEEP_RUN_DIR', fallback=False)
     tmpdir_base = settings.get('worker', 'BASE_RUN_DIR', fallback=None)
 
-    nThread = 9
+    nThread = get_json_param(config_path, "ktools_num_processes")
 
     # Setup Job cancellation handler
     def analysis_cancel_handler(signum, frame):
