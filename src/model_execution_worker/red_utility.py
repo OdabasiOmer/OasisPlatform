@@ -413,14 +413,13 @@ def generate_bash(ktools_filepath, ored_base_filepath, num_processes, runRI, out
                     # Replace everything before "| fm" with the new string.
                     new_line = f"( tee < fifo/fifo_p{ii} fifo/gul_P{ii}" + line[pos:]
                     modified_lines.append(new_line)
-                    ii == ii+1
+                    ii = ii+1
                 else:
                     # If the expected substring is not found, leave the line unchanged.
                     modified_lines.append(line)
             else:
                 modified_lines.append(line)
-                logging.error("Something went wrong when generating the bash script. You might obtain zero-loss results!")
-        
+
         return modified_lines
 
     # Read the entire run_ktools.sh file
