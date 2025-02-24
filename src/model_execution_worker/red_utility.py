@@ -204,6 +204,50 @@ def delete_lines_from_file(file_path, start_line, end_line):
         print(f"An error occurred: {e}")
 
 def georeference(inputLocationFilePath, outputFilePath, inputDataDir):
+    
+    """
+    Georeferencing function to process location data and determine missing coordinates using postal codes.
+    requires pandas, logging and os
+    
+    Error: Critical issue, georeferencing cannot proceed.
+        ○ Case 1.4: Both coordinates and postal code data are empty/invalid for an entry.
+        ○ Case 2.2: Coordinates are present but empty, and no postal code field.
+        ○ Case 3.2: Postal code is present but empty/invalid, and no coordinates field.
+        ○ Case 4: Neither coordinates nor postal code fields are present.
+    
+    Warning: Non-critical issue, georeferencing can proceed but with limitations.
+        ○ Case 1.2: Postal code data is missing but coordinates data are present.
+        ○ Case 1.3: Coordinates data are missing, using postal code data instead.
+        ○ Case 2.1: No PostalCode field.
+        ○ Case 3.1: Using postal code data because coordinates field isn’t provided.
+    """
+    # Set up logging
+    input_dir = os.path.dirname(inputLocationFilePath)
+    input_file_name = os.path.basename(inputLocationFilePath)
+    
+    # Remove extension and create log file name
+    input_name_no_ext = os.path.splitext(input_file_name)[0]
+    log_file = os.path.join(input_dir, f'{input_name_no_ext}_log.txt')
+    for handler in logging.root.handlers[:]:
+        logging.root.removeHandler(handler)
+    logging.basicConfig(
+    filename=log_file,  # Log file
+    filemode ='w',
+    level=logging.DEBUG,  # Log messages from DEBUG level and above
+    format='%(asctime)s - %(levelname)s - %(message)s')
+    
+    # Dictionary to track case occurrences
+    issue_counts = {
+    "1.2": 0,
+    "1.3": 0,
+    "1.4": 0,
+    "2.2": 0,
+    "3.1": 0,
+    "3.2": 0,
+    "2.1": 0,
+    "4": 0
+    }
+    
     ## IMPORT FILES ##
     # CAPs
     folder = inputDataDir
@@ -213,58 +257,121 @@ def georeference(inputLocationFilePath, outputFilePath, inputDataDir):
     for f in files_raw:
         if version in f:
             files.append(f)
-    CAPs = pd.read_csv(folder + files[0], sep="\t", dtype=str)
+    CAPs = pd.read_csv(folder + files[0], sep="\t", dtype=str) 
 
     # nations
     nations = pd.read_csv(os.path.join(inputDataDir, 'nations.txt'), index_col=[0])
 
     ## ANALYSIS ##
-    log = open("log.txt", "w+")
     data_in = pd.read_csv(inputLocationFilePath, dtype=str, encoding='latin-1')
     data_in.fillna('', inplace=True)
-
-    errors = pd.DataFrame(
-        np.array(
-            [
-                "[ERROR] PostalCode and Coordinates Columns Missing",
-                "[ERROR] Invalid PostalCode",
-                "[ERROR] Invalid CountryCode",
-                "[ERROR] Total",
-                "[WARNING] Coordinates Columns Missing",
-                "[WARNING] PostalCode = 0",
-                "[WARNING] Coordinates = 0",
-                "[WARNING] Total",
-            ]
-        ),
-        columns=["ErrType"],
-    )
-    errors["ErrNumber"] = 0
     
     # read all CAPs:
     CAPS_all = {}
-    
+    expected_columns = ['CUL', 'LATITUDE', 'LONGITUDE', 'NAME']  # Fixes issue with some of the cul files having extra columns
     for nation in nations.Country[data_in.CountryCode.unique()]:
-        CAPS_all[nation] = pd.read_csv(folder + nation + version, sep="\t", dtype={'CUL':str,'LATITUDE':float, 'LONGITUDE':float})
-        CAPS_all[nation] = CAPS_all[nation].drop(['NAME'], axis = 1).groupby(['CUL']).mean()
-        CAPS_all[nation]['CUL'] = CAPS_all[nation].index
+        try:
+            CAPS_all[nation] = pd.read_csv(folder + nation + version,sep="\t",dtype={'CUL': str, 'LATITUDE': float, 'LONGITUDE': float})
+            CAPS_all[nation] = CAPS_all[nation].loc[:, CAPS_all[nation].columns.intersection(expected_columns)]
+            CAPS_all[nation] = CAPS_all[nation].drop(['NAME'], axis=1, errors='ignore')
+            CAPS_all[nation] = CAPS_all[nation].groupby(['CUL']).mean()
+            CAPS_all[nation]['CUL'] = CAPS_all[nation].index
+        except:
+            logging.warning("No CUL file found for %s , may cause issues if coordinates are absent",  nation)
+                
+        
+    if "Latitude" not in data_in.columns:
+        logging.warning("Latitude column missing in file: %s", inputLocationFilePath)
+    if "Longitude" not in data_in.columns:
+        logging.warning("Longitude column missing in file: %s", inputLocationFilePath)
+    if "PostalCode" not in data_in.columns:
+        logging.warning("PostalCode column missing in file: %s", inputLocationFilePath)
+
+    # - -----------------------------------------------------------------------------------
+    # CASE 1 both fields present
+    if "Longitude" in data_in.columns and "PostalCode" in data_in.columns:
+        
+        for i in data_in.index:
+            if i % 1000 == 0:
+                logging.info("Locations processed: %d", i)
+            # Case 1.1 no issues
+            if data_in["Latitude"][i] == '' or data_in["Longitude"][i] == '':
+                CAPs = []
+                if data_in.PostalCode[i] == "0" or data_in.PostalCode[i] == '':
+                    # Case 1.4 Coordinates missing and PC missing
+                    logging.error("Location %s at index %d: Missing both Latitude/Longitude and invalid PostalCode [error 1.4]", data_in.LocNumber[i], i)
+                    issue_counts["1.4"] += 1
+                    status = 1
+                    logging.shutdown()
+                    
+                else:
+                    # Case 1.3 Coordinates missing but PC available
+                    try:
+                        nation = nations.Country[data_in.CountryCode[i]]
+                        CAPs = CAPS_all[nation]
+                        CAPs.index = CAPs.CUL
+                        CAP = data_in.PostalCode[i]              
+                    except:
+                        print(
+                            data_in.PortNumber[i]
+                            + ": country not in database ("
+                            + nation
+                            + ")\n"
+                        )
+                        logging.error('Country error for location %s at index %d [error 1.4]', data_in.LocNumber[i], i)
+                        status = 1
+                        issue_counts["1.4"] += 1
+                        logging.shutdown()
+                    
+                    try:
+                        data_in["Latitude"][i] = CAPs.LATITUDE[CAP]
+                        data_in["Longitude"][i] = CAPs.LONGITUDE[CAP]
+                        issue_counts["1.3"] += 1
+                    except:
+                        logging.error("Location %s at index %d: Missing both Latitude/Longitude and invalid PostalCode [error 1.4]", data_in.LocNumber[i], i)
+                        issue_counts["1.4"] += 1
+                        status = 1
+                        logging.shutdown()
+            
+              
+            # Case 1.2 Coordinates present but PC misisng
+            elif data_in.PostalCode[i] == "0" or data_in.PostalCode[i] == '':
+                issue_counts["1.2"] += 1
+
+
+    # CASE 2 only coordinates field present
+    elif "Longitude" in data_in.columns and "PostalCode" not in data_in.columns:
+        issue_counts["2.1"] += 1
+        data_in["PostalCode"] = 0
+        for i in data_in.index:
+            if i % 1000 == 0:
+                logging.info("Locations processed: " + str(i))
+            # Case 2.2 Coordinate field empty
+            if data_in["Latitude"][i] == '' or data_in["Longitude"][i] == '':
+                logging.error("Location %s at index %d: Missing both Latitude/Longitude and PostalCode field [error 2.2]", data_in.LocNumber[i], i)
+                issue_counts["2.2"] += 1
+                status = 1 # find a way to output 1 at the end
+                logging.shutdown()
     
-    if "Longitude" not in data_in.columns and "PostalCode" in data_in.columns:
-        print("---WARNING: Longitude and Latitude columns not provided---" + "\n")
-        print("Coordinates set from Postal Code" + "\n")
-        errors.loc[4,"ErrNumber"] += 1
+    # CASE 3: Only PC FIELD Present
+    elif "Longitude" not in data_in.columns and "PostalCode" in data_in.columns:
+        logging.info("---WARNING: Longitude and Latitude columns not provided---" + "\n")
+        logging.info("Coordinates set from Postal Code" + "\n")
+        issue_counts["3.1"] += 1
 
         data_in["Latitude"] = 0
         data_in["Longitude"] = 0
 
         for i in data_in.index:
             CAPs = []
+            # Case 3.2 Postal code data not valid or available
             try:
                 nation = nations.Country[data_in.CountryCode[i]]
                 CAPs = CAPS_all[nation]
                 CAPs.index = CAPs.CUL
                 CAP = str(data_in.PostalCode[i])
             except:
-                print(
+                logging.error(
                     data_in.PortNumber[i]
                     + " "
                     + data_in.LocNumber[i]
@@ -273,65 +380,65 @@ def georeference(inputLocationFilePath, outputFilePath, inputDataDir):
                     + nation
                     + ")\n"
                 )
-                errors.loc[2,"ErrNumber"] += 1
-                return 1
-                
+                logging.error('Country error for location %s at index %d [error 3.2]', data_in.LocNumber[i], i)
+                issue_counts["3.2"] += 1
+                status = 1
+                logging.shutdown()
+            # Case 3.1 Using PC to determine coordinates 
             try:
                 data_in["Latitude"][i] = CAPs.LATITUDE[CAP]
                 data_in["Longitude"][i] = CAPs.LONGITUDE[CAP]
-                errors.loc[6,"ErrNumber"] += 1
+                issue_counts["3.1"] += 1
             except:
+                logging.error("Location %s at index %d: Coordinates from PostalCode cannot be determined [error 3.2]", data_in.LocNumber[i], i)
+                data_in["Latitude"][i] = ''
+                data_in["Longitude"][i] = ''
+                issue_counts["3.2"] += 1
+                status = 1
+                logging.shutdown()
 
-                errors.loc[1,"ErrNumber"] += 1
-                return 1
-
+    # CASE 4: No fields present
     elif "Longitude" not in data_in.columns and "PostalCode" not in data_in.columns:
-        print(
+        logging.error(
             "***ERROR***: both coordinates and postal code are missing, impossible to set coordinate***"
             + "\n"
         )
-        errors["ErrNumber"].loc[0] += 1
-        return 1
+        issue_counts["4"] += 1
+        status = 1
+        logging.shutdown()
 
+    issue_descriptions = {
+        "1.4": "Both coordinates & postal code missing",
+        "2.2": "Coordinates empty, no postal code",
+        "3.2": "Postal code empty, no coordinates",
+        "4": "Neither coordinates nor postal code",
+        "1.2": "Postal code missing, coordinates present",
+        "1.3": "Coordinates from PostalCode",
+        "2.1": "No PostalCode field",
+        "3.1": "Using PostalCode (no coordinates)"
+    }
+    
+    # Write summary to log file
+    logging.info("\n--- Summary of Issues Detected ---")
+    
+    if any(count > 0 for count in issue_counts.values()):
+        for case, count in issue_counts.items():
+            if count > 0:
+                logging.info("Case %s [%s] occurred %d times", case, issue_descriptions[case], count)
     else:
-        for i in data_in.index:
-            if i % 1000 == 0:
-                print("Locations processed: " + str(i))
-                
-            if data_in["Latitude"][i] == '' or data_in["Longitude"][i] == '':
-                CAPs = []
-                try:
-                    nation = nations.Country[data_in.CountryCode[i]]
-                    CAPs = CAPS_all[nation]
-                    CAPs.index = CAPs.CUL
-                    CAP = data_in.PostalCode[i]
-                except:
-                    print(
-                        data_in.PortNumber[i]
-                        + ": country not in database ("
-                        + nation
-                        + ")\n"
-                    )
-                    errors.loc[2,"ErrNumber"] += 1
-                    print('Georeferencer: Country error')
-                    return 1
-                try:
-                    data_in["Latitude"][i] = CAPs.LATITUDE[CAP]
-                    data_in["Longitude"][i] = CAPs.LONGITUDE[CAP]
-                    errors.loc[6,"ErrNumber"] += 1
-                except:
-                    errors.loc[1,"ErrNumber"] += 1
-                    return 1
-            elif data_in.PostalCode[i] == "0":
-                print("WARNING, PostalCode missing\n")
-                errors["ErrNumber"].loc[5] += 1  
-                
-    errors["ErrNumber"].loc[7] = sum(errors["ErrNumber"].values[4::])
-    errors["ErrNumber"].loc[2] = sum(errors["ErrNumber"].values[0:4])
-    errors.to_csv(inputLocationFilePath + "_errors.txt", index=False)
-    data_in.to_csv(outputFilePath, index=False)
-    log.close()
-    return 0
+        logging.info("No issues were detected during georeferencing.")
+            
+    # Check status (errors)
+    if issue_counts["1.4"] + issue_counts["2.2"] + issue_counts["3.2"] + issue_counts["4"] > 0:
+        status = 1
+    else:
+        status = 0
+    
+    if issue_counts["4"] == 0:
+        data_in.to_csv(outputFilePath, index=False)
+        
+    logging.shutdown()  # Ensure log file is properly closed
+    return status
 
 def generate_bash(ktools_filepath, ored_base_filepath, num_processes, runRI, output_filepath):
     """Generates a REDCat-Oasis integrated analysis start bash block4, 
